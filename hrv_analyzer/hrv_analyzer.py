@@ -8,7 +8,7 @@ if __name__ == "__main__":
     readings = []
     hrvs = []
     #filename = 'hrv_analyzer/raw_readings.csv'
-    filename = 'ppg_logs_final.csv'
+    filename = '../ppg_logs_11.0.csv'
     with open(filename) as f:
         rdr = csv.reader(f)
         first = True

@@ -1,4 +1,4 @@
-const int pin = A0;
+const int pin = A1;
 int upperThreshold = 115;
 int lowerThreshold = 105;
 int offset = 400;
