@@ -11,12 +11,11 @@ from scipy.signal import filtfilt, butter, find_peaks
 if __name__ == "__main__":
     max_pt = 20000
     b, a = butter(5, 0.1)
-    y_buf =  [100] * max_pt
     timestamps = []
     readings = []
     hrvs = []
     #filename = 'hrv_analyzer/raw_readings.csv'
-    filename = '2022-08-25 08-46-32_정윤하.csv'
+    filename = '2022-08-24 21-19-34_홍요한_resampled.csv'
     offset = 400
     with open(filename) as f:
         rdr = csv.reader(f)
@@ -33,10 +32,10 @@ if __name__ == "__main__":
             try:
                 reading = float(reading) - offset
             except:
-                reading = 0
+                reading = readings[-1]
             
             readings.append(reading)
-            timestamps.append(timestamp)
+            timestamps.append(timestamp[14:])
             hrvs.append(0 if 'inf' in hrv else float(hrv))
     
     readings = filtfilt(b, a, readings)
@@ -44,7 +43,8 @@ if __name__ == "__main__":
     hrvs = np.asarray(hrvs)
     readings = np.asarray(readings)
 
-    plt.plot(timestamps, readings, 'g')
+    plt.plot(t, readings, 'g')
+    #plt.xticks(t, timestamps)
     plt.xlim([0, max_pt])
     plt.ylim([40, 220])
 
@@ -55,7 +55,7 @@ if __name__ == "__main__":
     fs = 380 #CSV 파일 보고 역산
     detectos = Detectors(fs)
     #r_peaks = detectos.two_average_detector(readings)
-    r_peaks, props = find_peaks(readings, distance=150)
+    r_peaks, props = find_peaks(readings, distance=200)
     rr_intervals = np.diff(r_peaks)
     heart_rates = 60.0/(rr_intervals/fs)
 
