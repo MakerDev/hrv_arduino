@@ -1,6 +1,9 @@
+import os
 import numpy as np
 import csv
 import random
+import math
+import utils
 
 '''
 1초에 들어온 샘플 수가 제각각이므로 fs에 맞게 세팅.
@@ -11,8 +14,6 @@ Params:
 Return:
     start_row of this second and the start_row of the next second.
 '''
-
-
 def capture_second_range(start_row, timestamps):
     start_time = timestamps[start_row]
     start_second = start_time.split(':')[-1].split('.')[0]
@@ -23,18 +24,19 @@ def capture_second_range(start_row, timestamps):
 
     return start_row, start_row + i
 
-#TODO: 일반적으로 raw sampling rate 얼마인지 체크
 def resample_csv(timestamps, readings, fs=30):
     timestamps_resampled = []
     readings_resampled = []
 
     current_row = 0
+
+    stat = []
     while True:
         current_row, next_sceond_row = capture_second_range(
             current_row, timestamps)
 
         frames_in_second = next_sceond_row - current_row
-
+        stat.append(frames_in_second)
         if frames_in_second<=0:
             break
         
@@ -51,8 +53,18 @@ def resample_csv(timestamps, readings, fs=30):
         readings_resampled.extend([readings[i] for i in indices])
 
         current_row = next_sceond_row
-
     return timestamps_resampled, readings_resampled
+
+'''
+시작 행으로부터, clip_len만큼 앞으로 가기
+return 그만큼 앞으로 간 결과
+'''
+def jump_clip_by(start_row, clip_len, fs_csv, fs_video=25):
+    seconds = math.trunc(clip_len)
+    frames = clip_len * 100 % 100
+    fs_ratio = fs_csv // fs_video
+    
+    return int(start_row + seconds * fs_csv + frames * fs_ratio)
 
 
 '''
@@ -63,36 +75,18 @@ if __name__ == "__main__":
     readings = []
     filename = '2022-08-24 21-19-34_홍요한.csv'
     record_date = filename.split(' ')[0]
-    with open(filename) as f:
-        rdr = csv.reader(f)
-        first = True
-        for line in rdr:
-            if first:
-                first = False                
-                continue
 
-            timestamp, reading = line
+    timestamps, readings = utils.load_readings(filename, apply_filter=False)
 
-            try:
-                reading = float(reading)
-            except:
-                reading = readings[-1]
-
-            readings.append(reading)
-            timestamps.append(timestamp[11:])  # 요일은 제거
-
+    #TODO: clip_start_timestamp를 21:22:47.16 이런식으로 받아서 샘플링 후 fs를 기준으로 굳이 우리가 계산안해도 어디가 시작 frame인지 알도록 하기
+    #만약 120으로 샘플링 했는데 위처럼 timestamp가 주어지면 21:22:47의 64번째 row가 시작 frame이 될 것.
+    #start_row에서 보험용으로 200개 더.
     start_row = 65432
-    clip_label_len = 4
-    cooldown_label_len = 2.15
-    cooldown_clip_len = 35
-    clip_lens = [201.06, 148.0, 54.11, 208.14, 96.18, 142.20,
-                 111.23, 131.12, 106.06, 64.22, 126.20, 128.09, 151.09, 40.06]
-    clip_emotion_label = ['neutral1', 'fear1', 'suprise1', 'sad1', 'disgust1', 'fear2',
-                          'anger1', 'happy1', 'neutral2', 'disgust2', 'anger2', 'happy2', 'sad2', 'suprise2']
-    # start_row에서 보험용으로 200개 더.
     timestamps = timestamps[start_row-200:]
     readings = readings[start_row-200:]
-    timestamps, readings = resample_csv(timestamps, readings, 100)
+    fs = 300
+    fs_video = 25
+    timestamps, readings = resample_csv(timestamps, readings, fs)
 
     #export resampled readings
     filename_resampled = filename.replace('.csv', '_resampled.csv')
@@ -100,4 +94,38 @@ if __name__ == "__main__":
         wr = csv.writer(f)
         for i in range(len(readings)):
             wr.writerow([f'{record_date} {timestamps[i]}', readings[i]])
-        
+
+
+    clip_label_len = 4
+    cooldown_label_len = 2.15
+    cooldown_clip_len = 35
+    #NOTICE: 아래의 frame들은 fps 25를 기준으로 맞춰진것임. 따라서 25의 배수로 sampling 하는것이 추후 계산시에 편할 것.
+    clip_lens = [201.06, 148.0, 54.11, 208.14, 96.18, 142.20,
+                 111.23, 131.12, 106.06, 64.22, 126.20, 128.09, 151.09, 40.06]
+    clip_emotion_label = ['neutral1', 'fear1', 'suprise1', 'sad1', 'disgust1', 'fear2',
+                          'anger1', 'happy1', 'neutral2', 'disgust2', 'anger2', 'happy2', 'sad2', 'suprise2']
+    clip_label_lens = []
+    cooldown_lable_lens = []
+    
+    #.csv 확장자 제거를 위해 뒤에서 4개는 제거.
+    folder = f"{filename.split('_')[1][:-4]}"
+
+    if not os.path.exists(folder):
+        os.mkdir(folder)
+
+    for i, clip_len in enumerate(clip_lens):
+        next_clip_start_row = jump_clip_by(start_row, clip_len, fs, fs_video)
+        clip_readings = readings[start_row:next_clip_start_row]
+        clip_timestamps = timestamps[start_row:next_clip_start_row]
+        clip_name = f'clip_{clip_emotion_label[i]}.csv'
+
+        with open(os.path.join(folder, clip_name), 'w', newline='') as f:
+            wr = csv.writer(f)
+            for row in range(len(clip_readings)):
+                wr.writerow([f'{record_date} {clip_timestamps[row]}', clip_readings[row]])
+
+        #skip label and cooldown. 
+        #Clip N 자막 4초
+        #쉬어가기 자막 2초 15프레임
+        #쉬어가기 영상 35초
+        start_row = jump_clip_by(next_clip_start_row, 41.15, fs, fs_video)
