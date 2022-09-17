@@ -24,7 +24,7 @@ def capture_second_range(start_row, timestamps):
 
     return start_row, start_row + i
 
-def resample_csv(timestamps, readings, fs=30):
+def resample_csv(timestamps, readings, target_fs):
     timestamps_resampled = []
     readings_resampled = []
 
@@ -42,12 +42,12 @@ def resample_csv(timestamps, readings, fs=30):
         
         # Sampling
         indices = list(range(current_row, next_sceond_row))
-        if frames_in_second < fs:
+        if frames_in_second < target_fs:
             #랜덤하게 중복으로 뽑기
-            indices.extend(list(np.random.choice(indices, fs - frames_in_second)))
+            indices.extend(list(np.random.choice(indices, target_fs - frames_in_second)))
             indices.sort()
-        elif frames_in_second > fs:
-            indices = sorted(random.sample(indices, fs))
+        elif frames_in_second > target_fs:
+            indices = sorted(random.sample(indices, target_fs))
 
         timestamps_resampled.extend([timestamps[i] for i in indices])
         readings_resampled.extend([readings[i] for i in indices])
@@ -60,11 +60,12 @@ def resample_csv(timestamps, readings, fs=30):
 return 그만큼 앞으로 간 결과
 '''
 def jump_clip_by(start_row, clip_len, fs_csv, fs_video=25):
-    seconds = math.trunc(clip_len)
-    frames = clip_len * 100 % 100
+    seconds = int(math.trunc(clip_len))
+    frames = int(round(clip_len, 2) * 100 % 100) #소수점 계산 오류로 30.00 같은데 29.99999로 나올때 버그 발생
     fs_ratio = fs_csv // fs_video
     
-    return int(start_row + seconds * fs_csv + frames * fs_ratio)
+    skip = seconds * fs_csv + frames * fs_ratio
+    return start_row + skip
 
 
 '''
@@ -73,10 +74,11 @@ csv파일과 첫 clip의 시작 row 넘버를 입력받아 predefine된 영상�
 if __name__ == "__main__":
     timestamps = []
     readings = []
+    folder = 'ppgs'
     filename = '2022-08-24 21-19-34_홍요한.csv'
     record_date = filename.split(' ')[0]
 
-    timestamps, readings = utils.load_readings(filename, apply_filter=False)
+    timestamps, readings = utils.load_readings(os.path.join(folder, filename), apply_filter=False)
 
     #TODO: clip_start_timestamp를 21:22:47.16 이런식으로 받아서 샘플링 후 fs를 기준으로 굳이 우리가 계산안해도 어디가 시작 frame인지 알도록 하기
     #만약 120으로 샘플링 했는데 위처럼 timestamp가 주어지면 21:22:47의 64번째 row가 시작 frame이 될 것.
@@ -90,7 +92,7 @@ if __name__ == "__main__":
 
     #export resampled readings
     filename_resampled = filename.replace('.csv', '_resampled.csv')
-    with open(filename_resampled, 'w', newline='') as f:
+    with open(os.path.join(folder, filename_resampled), 'w', newline='') as f:
         wr = csv.writer(f)
         for i in range(len(readings)):
             wr.writerow([f'{record_date} {timestamps[i]}', readings[i]])
@@ -104,8 +106,11 @@ if __name__ == "__main__":
                  111.23, 131.12, 106.06, 64.22, 126.20, 128.09, 151.09, 40.06]
     clip_emotion_label = ['neutral1', 'fear1', 'suprise1', 'sad1', 'disgust1', 'fear2',
                           'anger1', 'happy1', 'neutral2', 'disgust2', 'anger2', 'happy2', 'sad2', 'suprise2']
-    clip_label_lens = []
-    cooldown_lable_lens = []
+
+    #clip label 2부터 14까지 존재
+    clip_label_lens     = [3.24, 3.04, 4.0, 3.24, 3.24, 3.23, 3.24, 3.24, 3.24, 3.24, 3.24, 3.24, 4.0]
+    #쉬어가기 1~13까지 존재
+    cooldown_lable_lens = [2.15, 2.19, 2.19, 2.19, 2.14, 2.18, 2.20, 2.17, 2.19, 2.20, 2.19, 2.19, 2.19]
     
     #.csv 확장자 제거를 위해 뒤에서 4개는 제거.
     folder = f"{filename.split('_')[1][:-4]}"
@@ -113,6 +118,7 @@ if __name__ == "__main__":
     if not os.path.exists(folder):
         os.mkdir(folder)
 
+    start_row = 314
     for i, clip_len in enumerate(clip_lens):
         next_clip_start_row = jump_clip_by(start_row, clip_len, fs, fs_video)
         clip_readings = readings[start_row:next_clip_start_row]
@@ -125,7 +131,8 @@ if __name__ == "__main__":
                 wr.writerow([f'{record_date} {clip_timestamps[row]}', clip_readings[row]])
 
         #skip label and cooldown. 
-        #Clip N 자막 4초
-        #쉬어가기 자막 2초 15프레임
-        #쉬어가기 영상 35초
-        start_row = jump_clip_by(next_clip_start_row, 41.15, fs, fs_video)
+        #쉬어가기 영상 35.01초
+        #마지막 영상 처리 후에는 스킵 없음.
+        if i < len(clip_lens) - 1:
+            skip_amount = cooldown_lable_lens[i] + 35.01 + clip_label_lens[i]
+            start_row = jump_clip_by(next_clip_start_row, skip_amount, fs, fs_video)
