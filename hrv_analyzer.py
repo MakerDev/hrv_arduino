@@ -23,6 +23,7 @@ if __name__ == "__main__":
     fs = 380 #CSV 파일 보고 역산
     r_peaks, props = find_peaks(readings, distance=200)
     rr_intervals = np.diff(r_peaks)
+    rr_intervals = utils.calc_rr_intervals(readings, distance=200)
     heart_rates = 60.0/(rr_intervals/fs)
 
     heart_rates_interp = np.interp(t, r_peaks[1:], heart_rates)

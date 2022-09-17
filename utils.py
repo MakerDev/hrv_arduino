@@ -1,10 +1,6 @@
-import matplotlib.pyplot as plt
 import csv
 import numpy as np
-import scipy
 from scipy.signal import filtfilt, butter, find_peaks
-
-
 
 '''
 Filter not applied
