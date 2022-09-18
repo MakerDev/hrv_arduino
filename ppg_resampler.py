@@ -4,6 +4,7 @@ import csv
 import random
 import math
 import utils
+import datetime
 
 '''
 1초에 들어온 샘플 수가 제각각이므로 fs에 맞게 세팅.
@@ -13,14 +14,23 @@ Params:
     start_row: This should be index of the row containing the first frame timestamp.
 Return:
     start_row of this second and the start_row of the next second.
+    If this is the last second of the given timestamps, both return values are the same as the input start_row
 '''
 def capture_second_range(start_row, timestamps):
     start_time = timestamps[start_row]
-    start_second = start_time.split(':')[-1].split('.')[0]
+    # start_second = start_time.split(':')[-1].split('.')[0]
+    start_second = extract_second(start_time)
+    end_of_line = True
+
     for i, timestamp in enumerate(timestamps[start_row:]):
-        current_second = timestamp.split(':')[-1].split('.')[0]
+        current_second = extract_second(timestamp)
+        # current_second = timestamp.split(':')[-1].split('.')[0]
         if current_second != start_second:
+            end_of_line = False
             break
+    
+    if end_of_line:
+        return start_row, start_row
 
     return start_row, start_row + i
 
@@ -69,6 +79,55 @@ def jump_clip_by(start_row, clip_len, fs_csv, fs_video=25):
 
 
 '''
+18:27:43.968400 형태의 timestamp에서 초를 추출함
+'''
+def extract_second(timestamp:str):
+    return int(timestamp.split(':')[-1].split('.')[0])
+
+'''
+현재 timestampe에서 1초 증가한 timestamp문자열 얻기
+'''
+def tick_second(timestamp_str, dateformat="%H:%M:%S.%f"):
+    datetime_convert = datetime.datetime.strptime(timestamp_str, dateformat)
+    next_second = datetime_convert + datetime.timedelta(seconds=1)
+
+    return datetime.datetime.strftime(next_second, dateformat)
+
+'''
+중간에 녹화가 안된 부분들을 감지하고, 해당 부분들을 -1로 채우거나 옵션에 따라 보간하기
+return:
+    보간 완료된 timestamps와 readings
+'''
+def fill_empty_timestamps(timestamps, readings, target_fs):
+    start_row = 0
+    while True:
+        _, next_start_row = capture_second_range(start_row, timestamps)
+
+        #The last second.
+        if start_row == next_start_row:
+            return timestamps, readings
+
+        next_second_truth = tick_second(timestamps[start_row])
+        next_second = timestamps[next_start_row]
+
+        #ms는 비교하지 않음.
+        if extract_second(next_second_truth) != extract_second(next_second):
+            #18:27:43.968400에서 18:27:44.968400 얻기.
+            #TODO: ms 단위도 interpolate하기.
+            timestamp_interpolation = [next_second_truth] * target_fs
+            #중간에 빠진 부분 있으면 -1로 채우기.
+            reading_interpolation = [-1] * target_fs
+
+            timestamps = timestamps[:next_start_row] + timestamp_interpolation + timestamps[next_start_row+target_fs:]
+            readings = readings[:next_start_row] + reading_interpolation + readings[next_start_row+target_fs:]
+
+            start_row = next_start_row + target_fs
+        else:
+            start_row = next_start_row
+            
+
+
+'''
 csv파일과 첫 clip의 시작 row 넘버를 입력받아 predefine된 영상의 정보를 이용하여, csv를 잘라낸다.
 '''
 if __name__ == "__main__":
@@ -89,6 +148,7 @@ if __name__ == "__main__":
     fs = 300
     fs_video = 25
     timestamps, readings = resample_csv(timestamps, readings, fs)
+    timestamps, readings = fill_empty_timestamps(timestamps, readings, fs)
 
     #export resampled readings
     filename_resampled = filename.replace('.csv', '_resampled.csv')
@@ -118,6 +178,7 @@ if __name__ == "__main__":
     if not os.path.exists(folder):
         os.mkdir(folder)
 
+    #Divide PPG raw datas.
     start_row = 314
     for i, clip_len in enumerate(clip_lens):
         next_clip_start_row = jump_clip_by(start_row, clip_len, fs, fs_video)
