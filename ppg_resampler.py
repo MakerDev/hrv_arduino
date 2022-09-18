@@ -100,30 +100,33 @@ return:
 '''
 def fill_empty_timestamps(timestamps, readings, target_fs):
     start_row = 0
+    cnt = 0
+    
     while True:
         _, next_start_row = capture_second_range(start_row, timestamps)
 
         #The last second.
         if start_row == next_start_row:
+            print(cnt)
             return timestamps, readings
 
         next_second_truth = tick_second(timestamps[start_row])
         next_second = timestamps[next_start_row]
-
         #ms는 비교하지 않음.
         if extract_second(next_second_truth) != extract_second(next_second):
             #18:27:43.968400에서 18:27:44.968400 얻기.
             #TODO: ms 단위도 interpolate하기.
-            timestamp_interpolation = [next_second_truth] * target_fs
+            timestamps_interpolation = [next_second_truth] * target_fs
             #중간에 빠진 부분 있으면 -1로 채우기.
             reading_interpolation = [-1] * target_fs
+            timestamps_interpolated = timestamps[:next_start_row] + timestamps_interpolation + timestamps[next_start_row:]
+            readings_interpolated = readings[:next_start_row] + reading_interpolation + readings[next_start_row:]
 
-            timestamps = timestamps[:next_start_row] + timestamp_interpolation + timestamps[next_start_row+target_fs:]
-            readings = readings[:next_start_row] + reading_interpolation + readings[next_start_row+target_fs:]
-
-            start_row = next_start_row + target_fs
-        else:
-            start_row = next_start_row
+            #바로 넣으면 timestamps가 변형되면서 밀리는 현상 발생하는 걸로 보임.
+            timestamps = timestamps_interpolated
+            readings = readings_interpolated
+            cnt+=1
+        start_row = next_start_row
             
 
 
@@ -191,7 +194,7 @@ if __name__ == "__main__":
             for row in range(len(clip_readings)):
                 wr.writerow([f'{record_date} {clip_timestamps[row]}', clip_readings[row]])
 
-        #skip label and cooldown. 
+        #skip label and cooldown.
         #쉬어가기 영상 35.01초
         #마지막 영상 처리 후에는 스킵 없음.
         if i < len(clip_lens) - 1:
