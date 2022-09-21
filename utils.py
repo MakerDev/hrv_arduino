@@ -2,6 +2,12 @@ import csv
 import numpy as np
 from scipy.signal import filtfilt, butter, find_peaks
 
+def calc_rr_intervals(readings, distance):
+    r_peaks, _ = find_peaks(readings, distance=distance)
+    rr_intervals = np.diff(r_peaks)
+
+    return rr_intervals
+
 '''
 Filter not applied
 
