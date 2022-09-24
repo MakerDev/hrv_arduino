@@ -1,4 +1,3 @@
-from turtle import distance
 import numpy as np
 import utils
 from utils import calc_rr_intervals
