@@ -129,7 +129,7 @@ def fill_empty_timestamps(timestamps, readings, target_fs):
         start_row = next_start_row
             
 
-def resample_csv(path, fs=300):
+def resample_csv(path, resampled_csv_path, fs=300):
     timestamps, readings = utils.load_readings(path, apply_filter=False)
 
     #TODO: clip_start_timestamp를 21:22:47.16 이런식으로 받아서 샘플링 후 fs를 기준으로 굳이 우리가 계산안해도 어디가 시작 frame인지 알도록 하기
@@ -140,10 +140,10 @@ def resample_csv(path, fs=300):
     readings = readings[start_row-200:]
     timestamps, readings = resample_csv_internal(timestamps, readings, fs)
     timestamps, readings = fill_empty_timestamps(timestamps, readings, fs)
+    record_date = path.split(' ')[0]
 
-    #export resampled readings
-    filename_resampled = filename.replace('.csv', '_resampled.csv')
-    with open(os.path.join(folder, filename_resampled), 'w', newline='') as f:
+    #export resampled readings    
+    with open(resampled_csv_path, 'w', newline='') as f:
         wr = csv.writer(f)
         for i in range(len(readings)):
             wr.writerow([f'{record_date} {timestamps[i]}', readings[i]])
@@ -157,36 +157,19 @@ if __name__ == "__main__":
     timestamps = []
     readings = []
     folder = 'ppgs'
-    filename = '2022-08-30 16-11-43_윤보현.csv'
-    record_date = filename.split(' ')[0]
-    path = os.path.join(folder, filename)
+    filename = '2022-08-20 20-34-23_suan.csv'
     
+    csv_files = os.listdir(folder)
+    record_date = filename.split(' ')[0]
+
+    path = os.path.join(folder, filename)
+    resampled_file_path = path.replace('.csv', '_resampled.csv')
     fs = 300
-    if not os.path.exists(path.replace('.csv', '_resampled.csv')):
-        timestamps, readings = resample_csv(path, fs)
+    if not os.path.exists(resampled_file_path):
+        timestamps, readings = resample_csv(path, resampled_file_path, fs)            
     else:
-        timestamps, readings = utils.load_readings(path, offset=0, apply_filter=False)
-        
+        timestamps, readings = utils.load_readings(resampled_file_path, offset=0, apply_filter=False)
 
-    # timestamps, readings = utils.load_readings(os.path.join(folder, filename), apply_filter=False)
-
-    # #TODO: clip_start_timestamp를 21:22:47.16 이런식으로 받아서 샘플링 후 fs를 기준으로 굳이 우리가 계산안해도 어디가 시작 frame인지 알도록 하기
-    # #만약 120으로 샘플링 했는데 위처럼 timestamp가 주어지면 21:22:47의 64번째 row가 시작 frame이 될 것.
-    # #start_row에서 보험용으로 200개 더.
-    # start_row = 200
-    # timestamps = timestamps[start_row-200:]
-    # readings = readings[start_row-200:]
-    # fs = 300
-    # fs_video = 25
-    # timestamps, readings = resample_csv(timestamps, readings, fs)
-    # timestamps, readings = fill_empty_timestamps(timestamps, readings, fs)
-
-    # #export resampled readings
-    # filename_resampled = filename.replace('.csv', '_resampled.csv')
-    # with open(os.path.join(folder, filename_resampled), 'w', newline='') as f:
-    #     wr = csv.writer(f)
-    #     for i in range(len(readings)):
-    #         wr.writerow([f'{record_date} {timestamps[i]}', readings[i]])
     fs_video = 25
 
     clip_label_len = 4
@@ -204,13 +187,13 @@ if __name__ == "__main__":
     cooldown_lable_lens = [2.15, 2.19, 2.19, 2.19, 2.14, 2.18, 2.20, 2.17, 2.19, 2.20, 2.19, 2.19, 2.19]
     
     #.csv 확장자 제거를 위해 뒤에서 4개는 제거.
-    folder = f"{filename.split('_')[1][:-4]}"
+    folder = f"ppgs_sep/{filename.split('_')[1][:-4]}"
 
     if not os.path.exists(folder):
         os.mkdir(folder)
 
     #Divide PPG raw datas.
-    start_row = 34200
+    start_row = 80916
     for i, clip_len in enumerate(clip_lens):
         next_clip_start_row = jump_clip_by(start_row, clip_len, fs, fs_video)
         clip_readings = readings[start_row:next_clip_start_row]
