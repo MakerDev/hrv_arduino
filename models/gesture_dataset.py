@@ -13,12 +13,9 @@ import config
 import torch
 from sklearn.model_selection import train_test_split
 
-def load_kinematic_dataset(threshold=700):
-    root = "D:/AESPA Dataset/kinematic-dataset"
-    #1. file_info.csv로부터, 각 파일의 이름을 키로 하여, 그 파일의 정보를 담고있는 dict를 생성한다.
-    file_info_path = f"{root}/file-info.csv"
+def get_file_infos(info_file_path):
     file_infos = {}
-    with open(file_info_path) as f:
+    with open(info_file_path) as f:
         reader = csv.reader(f)
         
         header = next(reader)
@@ -29,26 +26,29 @@ def load_kinematic_dataset(threshold=700):
             for i, info in enumerate(line[1:]):
                 file_info[header[i+1]] = info
             file_infos[filename] = file_info
+
+    return file_infos
+
+def load_kinematic_dataset(file_infos, files_root_folder, len_sequence=700):
     x_data = []
     y_data = []
     
-    file_list = glob.glob(os.path.join(root, "BVH_only_motion", '**/*.bvh'), recursive=True)
+    file_list = glob.glob(os.path.join(files_root_folder, '**/*.bvh'), recursive=True)
 
-    for file in tqdm(file_list[:1000]):
+    for file in tqdm(file_list):
         with open(file) as f:
-            reader = csv.reader(f, delimiter=' ')
             data_np = np.genfromtxt(file, delimiter=' ', skip_header=2, skip_footer=1)
-            if data_np.shape[0] <= threshold:
+            if data_np.shape[0] <= len_sequence:
                 continue
 
-            data_np = data_np[:threshold][:]
+            data_np = data_np[:len_sequence][:]
             filename = os.path.basename(file)[:-4] #Remove extension.
             label = file_infos[filename]["emotion"]
             target = config.LABEL_TO_INDEX[label]
             x_data.append(data_np)
             y_data.append(target)
 
-    return np.asarray(x_data, dtype=float), np.asarray(y_data, dtype=int)        
+    return np.asarray(x_data, dtype=float), np.asarray(y_data, dtype=int)
 
 class GestureDataset(data.Dataset):
     def __init__(self, inputs, targets):
@@ -61,29 +61,29 @@ class GestureDataset(data.Dataset):
     def __len__(self):
         return len(self.inputs)
         
-
 # Gesture data manager
 class GestureDataManager():
     def __init__(self, batch_size=4):
         self.batch_size  = batch_size        
     
     
-    def Load_Dataset(self):
-        global BATCH_SIZE
-        
-        #spatial_transform=[Resize((160, 140))]
-        spatial_transform = []
-        spatial_transform.append(ToTensor())
+    def Load_Dataset(self):        
+        spatial_transform = [ToTensor()]
         spatial_transform = Compose(spatial_transform)
 
-        inputs, targets = load_kinematic_dataset()
+        root = "D:/AESPA Dataset/kinematic-dataset"
+        #1. file_info.csv로부터, 각 파일의 이름을 키로 하여, 그 파일의 정보를 담고있는 dict를 생성한다.
+        info_file_path = f"{root}/file-info.csv"
+        file_infos = get_file_infos(info_file_path)
+        bvh_files_root = os.path.join(root, "BVH_only_motion")
+        inputs, targets = load_kinematic_dataset(file_infos=file_infos, files_root_folder=bvh_files_root)
 
         inputs = torch.Tensor(inputs)
         inputs = inputs.reshape(-1, 1, 700, 59, 6)
         # target_onehot = torch.Tensor(np.eye(7)[targets]).long()
         targets = torch.Tensor(targets).long()
 
-        x_train, x_test, y_train, y_test = train_test_split(inputs, targets, test_size=0.2)
+        x_train, x_test, y_train, y_test = train_test_split(inputs, targets, test_size=0.2, shuffle=False)
 
         return GestureDataset(x_train, y_train), GestureDataset(x_test, y_test)
     

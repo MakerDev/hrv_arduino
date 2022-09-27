@@ -4,8 +4,22 @@ import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 import seaborn as sns
 import config
+import torch
 
 from scipy.signal import filtfilt, butter, find_peaks
+
+
+def calculate_accuracy(outputs, targets):
+    with torch.no_grad():
+        batch_size = targets.size(0)
+
+        _, pred = outputs.topk(1, 1, largest=True, sorted=True)
+        pred = pred.t()
+        correct = pred.eq(targets.view(1, -1))
+        n_correct_elems = correct.float().sum().item()
+
+        return n_correct_elems / batch_size
+
 
 def plot_confusion_matrix(cf_matrix, normalize=False, to_show=False, savefile_path=None):
     plt.figure(figsize=(10, 9))

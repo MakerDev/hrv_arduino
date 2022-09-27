@@ -12,43 +12,9 @@ import torch.optim as optim
 import torch.nn.functional as F
 from models.gesture_dataset import *
 
-
-
 def sf(float_input):
     scientific_output = np.format_float_scientific(float_input, trim='-', precision=0, exp_digits=2)
     return scientific_output
-
-# region Settings
-BATCH_SIZE  = 4
-NUM_CLASSES = 7
-
-''''''''''''''''''''''''''''''''''''
-'''          Need to tune        '''
-''''''''''''''''''''''''''''''''''''
-MODEL_DEPTH    = 10
-INPUT_RATIO    = 0.25 # Multiply 0.25 to both widht and height.
-
-LEARNING_RATE  = 0.000001 # L1
-L2WEIGHT_DECAY = 0.000001  # L2
-DATASET_NAME   = 'front'
-''''''''''''''''''''''''''''''''''''
-
-SAMPLING_RATE = 180
-NUM_VARIABLES = 5
-EPOCHS        = 100
-GPU_NUM       = 0
-
-IS_CUDA = torch.cuda.is_available()
-#DEVICE  = 'cpu'
-DEVICE  = torch.device('cuda:' + str(GPU_NUM) if IS_CUDA else 'cpu')
-
-ModelName     = "3D_RESNET_V1"
-SaveModelName = ModelName + "_B" + str(BATCH_SIZE) + "_T" + str(MODEL_DEPTH) + "_IN" + str(INPUT_RATIO) + \
-                "_L1_" + str(sf(LEARNING_RATE)) +"_L2_" + str(sf(L2WEIGHT_DECAY)) + "_" + DATASET_NAME
-
-DATASET_DIR = "./Datasets_front"
-print("MODEL NAME: ", SaveModelName)
-# endregion
 
 # region 3D ResNet
 def get_inplanes():
@@ -278,6 +244,28 @@ def generate_model(model_depth, **kwargs):
     return model
 
 if __name__ == "__main__":
+    # region Settings
+    BATCH_SIZE  = 4
+    NUM_CLASSES = 7
+
+    ''''''''''''''''''''''''''''''''''''
+    '''          Need to tune        '''
+    ''''''''''''''''''''''''''''''''''''
+    MODEL_DEPTH    = 10
+
+    LEARNING_RATE  = 0.000001 # L1
+    L2WEIGHT_DECAY = 0.000001  # L2
+    ''''''''''''''''''''''''''''''''''''
+
+    NUM_VARIABLES = 5
+    EPOCHS        = 300
+    GPU_NUM       = 0
+
+    IS_CUDA = torch.cuda.is_available()
+    #DEVICE  = 'cpu'
+    DEVICE  = torch.device('cuda:' + str(GPU_NUM) if IS_CUDA else 'cpu')
+    # endregion
+
     DM = GestureDataManager(BATCH_SIZE)
     TRAIN_GESTURE_DATA, TEST_GESTURE_DATA = DM.Load_Dataset()
     TRAIN_LOADER, TEST_LOADER     = DM.Load_DataLoader(TRAIN_GESTURE_DATA, TEST_GESTURE_DATA)
@@ -290,9 +278,10 @@ if __name__ == "__main__":
         MODEL.load_state_dict(torch.load("savepoints/savepoint_100.pth"))
         
     MODEL.to(DEVICE)
-        
-    optimizer = optim.Adam(MODEL.parameters(), lr = LEARNING_RATE, weight_decay = L2WEIGHT_DECAY)
 
+    optimizer = optim.Adam(MODEL.parameters(), lr = LEARNING_RATE, weight_decay = L2WEIGHT_DECAY)
+    
+    best_acc = 0.0
     for epoch in range(1, EPOCHS+1):
         MODEL.train()
         total_loss = []
@@ -313,7 +302,6 @@ if __name__ == "__main__":
                 train_epoch.set_description(f'Training epoch {epoch}->')            
 
         MODEL.eval()
-
         with torch.no_grad():
             with tqdm(TEST_LOADER, unit='batch') as test_epoch:
                 for val_inputs, val_targets in test_epoch:
@@ -330,12 +318,18 @@ if __name__ == "__main__":
 
         total_loss_mean = np.mean(total_loss)
         total_acc_mean = np.mean(total_acc)
+
         print(f'loss {total_loss_mean:.3f} | Acc {total_acc_mean:.3f}\n')
             
         if epoch in [10, 20, 50, 100, 200, 250, 500]:
-            torch.save(MODEL.state_dict(), f"savepoints/savepoint_{epoch}.pth")
+            torch.save(MODEL.state_dict(), f"savepoints/savepoint_{epoch}_{total_acc_mean*100:.1f}.pth")
         
-    torch.save(MODEL.state_dict(), f"savepoints/savepoint_{epoch}.pth")
+        if epoch > 100 and total_acc_mean > best_acc:
+            torch.save(MODEL.state_dict(), f"savepoints/savepoint_{epoch}.pth")
+        best_acc = max(total_acc_mean, best_acc)
+        
+        torch.save(MODEL.state_dict(), f"savepoints/savepoint_{epoch}.pth")
+    
 
     # evaluation
     # DM = GestureDataManager(DATASET_DIR, BATCH_SIZE)
