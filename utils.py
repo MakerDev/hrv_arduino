@@ -5,8 +5,43 @@ from matplotlib.axes import Axes
 import seaborn as sns
 import config
 import torch
-
+from scipy.interpolate import interp1d
 from scipy.signal import filtfilt, butter, find_peaks
+
+def load_vreed_data(dat_file):
+    dat = np.load(dat_file, allow_pickle=True)
+    targets = dat["Labels"]
+    '''
+    Data = [13, 2, Length of Data]
+    '''
+    data = dat["Data"]
+    ecg_datas = []
+
+    for data_for_a_video in data:
+        ecg_readings = data_for_a_video[:, 1]
+        ecg_datas.append(ecg_readings)
+
+    # 데이터가 13개가 다 안들어있는 경우가 있다. => 아니 그럼 뭐가 뭔지 어떻게 알아..?
+    # print(len(targets), len(ecg_datas))
+
+    return targets, ecg_datas
+
+
+def up_down_sampling(input_data, up_size=300):   
+    input_len = len(input_data)
+   
+    input_x = np.linspace(0, input_len, input_len, dtype=np.int32)
+    input_y = input_data
+
+    func_quad = interp1d(input_x, input_y, kind='quadratic')
+    x_interp  = np.linspace(input_x.min(), input_x.max(), up_size, dtype=np.int32)
+    y_interp  = func_quad(x_interp)
+       
+    return y_interp
+
+
+def normalize_data(data):
+    return (data - np.min(data)) / (np.max(data) - np.min(data)) - 0.5
 
 
 def calculate_accuracy(outputs, targets):
@@ -56,7 +91,7 @@ Filter not applied
 Return: 
     timestamps, readings
 '''
-def load_readings(filename, offset=400, apply_filter=True):
+def load_readings(filename, offset=400, apply_filter=True, N=5, Wn=0.1):
     timestamps = []
     readings = []
 
@@ -80,7 +115,7 @@ def load_readings(filename, offset=400, apply_filter=True):
             timestamps.append(timestamp[11:])
             
     if apply_filter:
-        b, a = butter(5, 0.1)
+        b, a = butter(N, Wn)
         readings = filtfilt(b, a, readings)    
         readings = np.asarray(readings)
 
