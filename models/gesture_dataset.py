@@ -36,17 +36,16 @@ def load_kinematic_dataset(file_infos, files_root_folder, len_sequence=700):
     file_list = glob.glob(os.path.join(files_root_folder, '**/*.bvh'), recursive=True)
 
     for file in tqdm(file_list):
-        with open(file) as f:
-            data_np = np.genfromtxt(file, delimiter=' ', skip_header=2, skip_footer=1)
-            if data_np.shape[0] <= len_sequence:
-                continue
+        data_np = np.genfromtxt(file, delimiter=' ', skip_header=2, skip_footer=1)
+        if data_np.shape[0] <= len_sequence:
+            continue
 
-            data_np = data_np[:len_sequence][:]
-            filename = os.path.basename(file)[:-4] #Remove extension.
-            label = file_infos[filename]["emotion"]
-            target = config.LABEL_TO_INDEX[label]
-            x_data.append(data_np)
-            y_data.append(target)
+        data_np = data_np[:len_sequence][:]
+        filename = os.path.basename(file)[:-4] #Remove extension.
+        label = file_infos[filename]["emotion"]
+        target = config.LABEL_TO_INDEX[label]
+        x_data.append(data_np)
+        y_data.append(target)
 
     return np.asarray(x_data, dtype=float), np.asarray(y_data, dtype=int)
 
