@@ -20,12 +20,8 @@ def sf(float_input):
     scientific_output = np.format_float_scientific(float_input, trim='-', precision=0, exp_digits=2)
     return scientific_output
 
-# region 3D ResNet
 def get_inplanes():
     return [64, 128, 256, 512]
-
-
-# endregion
 
 def generate_model(model_depth, **kwargs):
     assert model_depth in [10, 18, 34, 50, 101, 152, 200]
