@@ -17,14 +17,17 @@ import time
 import utils
 import config
 import joblib
-from gesture_dataset import load_kinematic_dataset
+from gesture_dataset import load_kinematic_dataset, get_file_infos
 
 
 if __name__ == "__main__":
-    x_data, y_data = load_kinematic_dataset()
+    root = "D:/AESPA Dataset/kinematic-dataset"
+    info_file_path = f"{root}/file-info.csv"
+    file_infos = get_file_infos(info_file_path)
+    bvh_files_root = os.path.join(root, "BVH_only_motion")
+    x_data, y_data = load_kinematic_dataset(file_infos, bvh_files_root)
 
     x_data = np.average(x_data, axis=1)
-
     x_train, x_test, y_train, y_test = train_test_split(x_data, y_data, test_size=0.2, stratify=y_data)
 
     model = MLPClassifier(hidden_layer_sizes=(584, 512, 512))
