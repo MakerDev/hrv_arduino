@@ -6,17 +6,18 @@ import math
 import utils
 import datetime
 
-'''
-1초에 들어온 샘플 수가 제각각이므로 fs에 맞게 세팅.
-만약 1초에 있는 샘플 수가 fs 미만이면 uniform 하게 샘플해서 늘리고, 넘치면 마찬가지로 uniform샘플하기.
-그런데 샘플을 보면 1초에 몇 백개씩 들어가있어서 일단 넘치는거 기준으로 먼저보면 좋을듯.
-Params:
-    start_row: This should be index of the row containing the first frame timestamp.
-Return:
-    start_row of this second and the start_row of the next second.
-    If this is the last second of the given timestamps, both return values are the same as the input start_row
-'''
 def capture_second_range(start_row, timestamps):
+    '''
+    1초에 들어온 샘플 수가 제각각이므로 fs에 맞게 세팅.
+    만약 1초에 있는 샘플 수가 fs 미만이면 uniform 하게 샘플해서 늘리고, 넘치면 마찬가지로 uniform샘플하기.
+    그런데 샘플을 보면 1초에 몇 백개씩 들어가있어서 일단 넘치는거 기준으로 먼저보면 좋을듯.
+
+    Params:
+        start_row: This should be index of the row containing the first frame timestamp.
+    Return:
+        start_row of this second and the start_row of the next second.
+        If this is the last second of the given timestamps, both return values are the same as the input start_row
+    '''
     start_time = timestamps[start_row]
     # start_second = start_time.split(':')[-1].split('.')[0]
     start_second = extract_second(start_time)
@@ -34,42 +35,14 @@ def capture_second_range(start_row, timestamps):
 
     return start_row, start_row + i
 
-def resample_csv_internal(timestamps, readings, target_fs):
-    timestamps_resampled = []
-    readings_resampled = []
 
-    current_row = 0
 
-    stat = []
-    while True:
-        current_row, next_sceond_row = capture_second_range(
-            current_row, timestamps)
-
-        frames_in_second = next_sceond_row - current_row
-        stat.append(frames_in_second)
-        if frames_in_second<=0:
-            break
-        
-        # Sampling
-        indices = list(range(current_row, next_sceond_row))
-        if frames_in_second < target_fs:
-            #랜덤하게 중복으로 뽑기
-            indices.extend(list(np.random.choice(indices, target_fs - frames_in_second)))
-            indices.sort()
-        elif frames_in_second > target_fs:
-            indices = sorted(random.sample(indices, target_fs))
-
-        timestamps_resampled.extend([timestamps[i] for i in indices])
-        readings_resampled.extend([readings[i] for i in indices])
-
-        current_row = next_sceond_row
-    return timestamps_resampled, readings_resampled
-
-'''
-시작 행으로부터, clip_len만큼 앞으로 가기
-return 그만큼 앞으로 간 결과
-'''
 def jump_clip_by(start_row, clip_len, fs_csv, fs_video=25):
+    '''
+    시작 행으로부터, clip_len만큼 앞으로 가기
+    
+    return 그만큼 앞으로 간 결과
+    '''
     seconds = int(math.trunc(clip_len))
     frames = int(round(clip_len, 2) * 100 % 100) #소수점 계산 오류로 30.00 같은데 29.99999로 나올때 버그 발생
     fs_ratio = fs_csv // fs_video
@@ -78,27 +51,29 @@ def jump_clip_by(start_row, clip_len, fs_csv, fs_video=25):
     return start_row + skip
 
 
-'''
-18:27:43.968400 형태의 timestamp에서 초를 추출함
-'''
+
 def extract_second(timestamp:str):
+    '''
+    18:27:43.968400 형태의 timestamp에서 초를 추출함
+    '''
     return int(timestamp.split(':')[-1].split('.')[0])
 
-'''
-현재 timestampe에서 1초 증가한 timestamp문자열 얻기
-'''
+
 def tick_second(timestamp_str, dateformat="%H:%M:%S.%f"):
+    '''
+    현재 timestampe에서 1초 증가한 timestamp문자열 얻기
+    '''
     datetime_convert = datetime.datetime.strptime(timestamp_str, dateformat)
     next_second = datetime_convert + datetime.timedelta(seconds=1)
 
     return datetime.datetime.strftime(next_second, dateformat)
 
-'''
-중간에 녹화가 안된 부분들을 감지하고, 해당 부분들을 -1로 채우거나 옵션에 따라 보간하기
-return:
-    보간 완료된 timestamps와 readings
-'''
+
 def fill_empty_timestamps(timestamps, readings, target_fs):
+    '''
+    중간에 녹화가 안된 부분들을 감지하고, 해당 부분들을 -1로 채우거나 옵션에 따라 보간하기
+    return: 보간 완료된 timestamps와 readings
+    '''
     start_row = 0
     cnt = 0
 
@@ -128,6 +103,44 @@ def fill_empty_timestamps(timestamps, readings, target_fs):
             cnt+=1
         start_row = next_start_row
             
+
+def resample_csv_internal(timestamps, readings, target_fs):
+    timestamps_resampled = []
+    readings_resampled = []
+
+    current_row = 0
+
+    stat = []
+    while True:
+        current_row, next_sceond_row = capture_second_range(
+            current_row, timestamps)
+
+        frames_in_second = next_sceond_row - current_row
+        stat.append(frames_in_second)
+        if frames_in_second<=0:
+            break
+        
+        # Sampling
+        indices = list(range(current_row, next_sceond_row))
+        if frames_in_second < target_fs:
+            #랜덤하게 중복으로 뽑기
+            indices.extend(list(np.random.choice(indices, target_fs - frames_in_second)))
+            indices.sort()
+        elif frames_in_second > target_fs:
+            indices = sorted(random.sample(indices, target_fs))        
+
+        timestamps_resampled.extend([timestamps[i] for i in indices])
+
+        #TODO : target_fs대비 일정 비율 만큼도 없으면 아예 그 second는 날려버리기?
+        if next_sceond_row - current_row >= 3:
+            current_readings_resampled = utils.up_down_sampling(readings[current_row:next_sceond_row], up_size=target_fs)
+        else:
+            current_readings_resampled = [readings[i] for i in indices]
+        readings_resampled.extend(current_readings_resampled)
+        
+        current_row = next_sceond_row
+    return timestamps_resampled, readings_resampled
+
 
 def resample_csv(path, resampled_csv_path, fs=300):
     timestamps, readings = utils.load_readings(path, apply_filter=False)
@@ -163,7 +176,7 @@ if __name__ == "__main__":
     record_date = filename.split(' ')[0]
 
     path = os.path.join(folder, filename)
-    resampled_file_path = path.replace('.csv', '_resampled.csv')
+    resampled_file_path = path.replace('.csv', '_resampled_interp.csv')
     fs = 300
     if not os.path.exists(resampled_file_path):
         timestamps, readings = resample_csv(path, resampled_file_path, fs)            
@@ -186,6 +199,8 @@ if __name__ == "__main__":
     #쉬어가기 1~13까지 존재
     cooldown_lable_lens = [2.15, 2.19, 2.19, 2.19, 2.14, 2.18, 2.20, 2.17, 2.19, 2.20, 2.19, 2.19, 2.19]
     
+    exit()
+
     #.csv 확장자 제거를 위해 뒤에서 4개는 제거.
     folder = f"ppgs_sep/{filename.split('_')[1][:-4]}"
 
