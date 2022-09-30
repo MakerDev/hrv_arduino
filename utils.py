@@ -40,8 +40,14 @@ def up_down_sampling(input_data, up_size=300):
     return y_interp
 
 
-def normalize_data(data):
-    return (data - np.min(data)) / (np.max(data) - np.min(data)) - 0.5
+def normalize_data(data, val_min=None, val_max=None):
+    if val_max == None:
+        val_max = np.max(data)
+    
+    if val_min == None:
+        val_min = np.min(data)
+
+    return (data - val_min) / (val_max - val_min) - 0.5
 
 
 def calculate_accuracy(outputs, targets):
@@ -85,13 +91,20 @@ def calc_rr_intervals(readings, distance):
 
     return rr_intervals
 
+def apply_butter_filter(raw_readings, N, Wn):
+    b, a = butter(N, Wn)
+    readings = filtfilt(b, a, raw_readings)    
+    readings = np.asarray(readings)
+
+    return readings
+
 '''
 Filter not applied
 
 Return: 
     timestamps, readings
 '''
-def load_readings(filename, offset=400, apply_filter=True, N=5, Wn=0.1):
+def load_readings(filename, offset=400, apply_filter=True, N=5, Wn=0.1, load_only_valid=False):
     timestamps = []
     readings = []
 
@@ -111,12 +124,15 @@ def load_readings(filename, offset=400, apply_filter=True, N=5, Wn=0.1):
             except:
                 reading = readings[-1]
             
+            if load_only_valid and reading < 0:
+                continue
+
             readings.append(reading)
             timestamps.append(timestamp[11:])
             
     if apply_filter:
         b, a = butter(N, Wn)
         readings = filtfilt(b, a, readings)    
-        readings = np.asarray(readings)
 
+    readings = np.asarray(readings)
     return timestamps, readings
