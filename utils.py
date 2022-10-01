@@ -107,7 +107,7 @@ Filter not applied
 Return: 
     timestamps, readings
 '''
-def load_readings(filename, offset=400, apply_filter=True, N=5, Wn=0.1, load_only_valid=False):
+def load_readings(filename, offset=0, apply_filter=True, N=5, Wn=0.1, load_only_valid=False):
     timestamps = []
     readings = []
 
