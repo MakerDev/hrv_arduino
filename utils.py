@@ -85,11 +85,14 @@ def plot_confusion_matrix(cf_matrix, normalize=False, to_show=False, savefile_pa
     if savefile_path != None:
         plt.savefig(savefile_path, dpi=150)
 
-def calc_rr_intervals(readings, distance):
-    r_peaks, _ = find_peaks(readings, distance=distance)
+def calc_rr_intervals(readings, distance=None, height=None):
+    '''
+    Return: r_peaks, rr_intervals
+    '''
+    r_peaks, _ = find_peaks(readings, distance=distance, height=height)
     rr_intervals = np.diff(r_peaks)
 
-    return rr_intervals
+    return r_peaks, rr_intervals
 
 def apply_butter_filter(raw_readings, N, Wn):
     b, a = butter(N, Wn)
