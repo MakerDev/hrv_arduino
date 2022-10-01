@@ -21,15 +21,25 @@ class HRVDataset(data.Dataset):
 
     def __len__(self):
         return len(self.inputs)
-        
+
 # VREED HRV data manager
 class HRVDataManager():
     def __init__(self, root_path, batch_size=4):
         self.root_path = root_path
-        self.batch_size  = batch_size        
+        self.batch_size  = batch_size
     
+    def convert_to_hrv(self, ecg_data, fs=1000):
+        t = np.arange(0., len(ecg_data), 1)
+        r_peaks, rr_intervals = utils.calc_rr_intervals(ecg_data, distance=500)
+
+        heart_rates = 60.0/(rr_intervals/fs)
+        heart_rates_interp = np.interp(t, r_peaks[1:], heart_rates)
+        heart_rates_interp = utils.normalize_data(heart_rates_interp)
+
+        return heart_rates_interp
+
     
-    def Load_Dataset(self, target_seq_len = 350000, pad_infront=True):        
+    def load_dataset(self, target_seq_len = 350000, pad_infront = True, as_hrv = False):        
         spatial_transform = [ToTensor()]
         spatial_transform = Compose(spatial_transform)
 
@@ -44,7 +54,15 @@ class HRVDataManager():
             if len(labels) != len(ecg_datas):
                 continue
 
-            for ecg_data in ecg_datas:
+            for i, ecg_data in enumerate(ecg_datas):
+                if as_hrv:
+                    try:
+                        # 119_ECG_GSR_PreProcessed의 5번 인덱스가 
+                        # 모양이 이상해서 peek detection이 안됨
+                        ecg_data = self.convert_to_hrv(ecg_data)
+                    except:
+                        continue
+
                 data_seq_len = len(ecg_data)
                 if data_seq_len >= target_seq_len:
                     inputs.append(ecg_data[:target_seq_len])
@@ -52,7 +70,9 @@ class HRVDataManager():
                     diff = target_seq_len - data_seq_len                    
                     inputs.append(np.concatenate(([-1] * diff, ecg_data)))
             
-            targets.extend(labels)
+                targets.append(labels[i])
+
+        # print(targets.count(4))
 
         inputs = torch.Tensor(inputs).float().reshape(-1, target_seq_len, 1)
         targets = torch.Tensor(targets).long()
@@ -60,10 +80,10 @@ class HRVDataManager():
 
         return HRVDataset(x_train, y_train), HRVDataset(x_test, y_test)
     
-    def Load_DataLoader(self, train, test):
+    def load_dataloader(self, train, test):
         return DataLoader(train, num_workers=4, batch_size=self.batch_size, shuffle=True, pin_memory=True, drop_last=True), \
                 DataLoader(test, num_workers=4, batch_size=self.batch_size, shuffle=False, pin_memory=True, drop_last=True)
 
 if __name__ == "__main__":
     DM = HRVDataManager("./vreed_dataset")
-    TRAIN_DATASET, TEST_DATASET = DM.Load_Dataset()
+    TRAIN_DATASET, TEST_DATASET = DM.load_dataset(as_hrv=True)
