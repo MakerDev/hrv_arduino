@@ -29,12 +29,11 @@ class Conv1dNetwork(nn.Module):
                                 stride=4,
                                 padding=1)
         self.pool = nn.MaxPool1d(4)
+        self.dropout = nn.Dropout(0.5)
         self.conv_net = nn.Sequential(
             self.conv1d_1,
-            #nn.ReLU(),
             self.pool,
             self.conv1d_2,
-            #nn.ReLU(),            
             self.pool
         )
 
@@ -43,6 +42,16 @@ class Conv1dNetwork(nn.Module):
         self.fc_layer1 = nn.Linear(flat_size, 1024)
         self.fc_layer2 = nn.Linear(1024, 512)
         self.fc_layer3 = nn.Linear(512, out_channel)
+        self.fc_net = nn.Sequential(
+            self.fc_layer1,
+            nn.ReLU(),
+            self.dropout,
+            self.fc_layer2,
+            nn.ReLU(),
+            self.dropout,
+            self.fc_layer3,
+            nn.ReLU()
+        )
     
     def get_flat_size(self, input_shape, conv_net):
         f = conv_net(torch.Tensor((torch.ones(1, *input_shape))))
@@ -50,27 +59,13 @@ class Conv1dNetwork(nn.Module):
 
 
     def forward(self, x):
-	    # Raw x shape : (B, S, F) => (B, 10, 3)        
-        # B: Batch, S: Sequence Length, F: Features.
-        # In hrv case, feature channel is 1
-        # Shape : (B, F, S) => (B, 3, 10)
         x = x.transpose(1, 2)
-        # Shape : (B, F, S) == (B, C, S) // C = channel => (B, 16, 10)
-        # x = self.pool(self.conv1d_1(x))
-        # Shape : (B, C, S) => (B, 32, 10)
-        # x = self.pool(self.conv1d_2(x))
         x = self.conv_net(x)
-        # Shape : (B, S, C) == (B, S, F) => (B, 10, 32)
         # x = x.transpose(1, 2)
         x = torch.flatten(x, 1)
                 
-        # Shape : (B, H) => (B, 50)
         # x = self.dropout(x)
-        # Shape : (B, 32)
-        x = F.relu(self.fc_layer1(x))
-        # Shape : (B, O) // O = output => (B, 1)
-        x = F.relu(self.fc_layer2(x))
-        x = F.relu(self.fc_layer3(x))
+        x = self.fc_net(x)
 
         return x
 
@@ -79,14 +74,14 @@ class Conv1dNetwork(nn.Module):
 if __name__ == "__main__":
     # region Settings
     BATCH_SIZE  = 4
-    NUM_CLASSES = 7
+    NUM_CLASSES = 5
 
     ''''''''''''''''''''''''''''''''''''
     '''          Need to tune        '''
     ''''''''''''''''''''''''''''''''''''
-    LEARNING_RATE  = 0.0001 # L1
+    LEARNING_RATE  = 0.00005 # L1
     # LEARNING_RATE  = 0.00005 # L1
-    L2WEIGHT_DECAY = 0.0001  # L2
+    L2WEIGHT_DECAY = 0.00005  # L2
     ''''''''''''''''''''''''''''''''''''
 
     EPOCHS        = 300
@@ -94,12 +89,18 @@ if __name__ == "__main__":
     IS_CUDA = torch.cuda.is_available()
     DEVICE  = torch.device('cuda:' + str(GPU_NUM) if IS_CUDA else 'cpu')
     # endregion
+    MODEL_NAME    = "ASEPA_PPG_SAM_TWO_DROPOUT"
+    
+    TB_LOG_DIR = f"tb_logs/{MODEL_NAME.lower()}"
+    
+    if not os.path.exists(TB_LOG_DIR):
+        os.mkdir(TB_LOG_DIR)
 
-    writer = SummaryWriter('tb_logs/aespa_hrv', comment='K_16_7_class_hrv')
+    writer = SummaryWriter(TB_LOG_DIR, comment=f'K_32_{MODEL_NAME}', filename_suffix=MODEL_NAME)
 
     # region TRAINING
     DM = AESPADataManager("./ppgs_sep", BATCH_SIZE)
-    TRAIN_PPG_DATA, TEST_PPG_DATA = DM.load_dataset(as_hrv=True)
+    TRAIN_PPG_DATA, TEST_PPG_DATA = DM.load_dataset(as_hrv=True, as_sam=True)
     TRAIN_LOADER, TEST_LOADER     = DM.load_dataloader(TRAIN_PPG_DATA, TEST_PPG_DATA)
     criterion = nn.CrossEntropyLoss().to(DEVICE)
 
@@ -176,17 +177,17 @@ if __name__ == "__main__":
 
         print(f'loss {total_loss_mean:.3f} | Acc {total_acc_mean:.3f}')
         conf_mat = metrics.confusion_matrix(result_anno_np, result_pred_np)
-        print(metrics.classification_report(result_anno_np, result_pred_np))
+        print(metrics.classification_report(result_anno_np, result_pred_np, zero_division=0))
         print(conf_mat)
 
         if epoch in [10, 20, 30, 50, 70, 85, 100, 120, 150, 170, 200, 250, 500]:
-            torch.save(MODEL.state_dict(), f"savepoints/aespa_hrv/savepoint_{epoch}_{total_acc_mean*100:.1f}.pth")
+            torch.save(MODEL.state_dict(), f"savepoints/aespa_hrv/savepoint_{epoch}_{total_acc_mean*100:.1f}_{MODEL_NAME}.pth")
         
         if epoch >= 100 and total_acc_mean > best_acc:
-            torch.save(MODEL.state_dict(), f"savepoints/aespa_hrv/savepoint_{epoch}_{total_acc_mean*100:.1f}.pth")
+            torch.save(MODEL.state_dict(), f"savepoints/aespa_hrv/savepoint_{epoch}_{total_acc_mean*100:.1f}_{MODEL_NAME}.pth")
         best_acc = max(total_acc_mean, best_acc)
 
         print(f'Best so far: {best_acc*100:.1f}%\n')
     
     writer.close()
-    torch.save(MODEL.state_dict(), f"savepoints/aespa_hrv/savepoint_{epoch}.pth")
+    torch.save(MODEL.state_dict(), f"savepoints/aespa_hrv/savepoint_{epoch}_{MODEL_NAME}.pth")

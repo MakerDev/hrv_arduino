@@ -30,9 +30,10 @@ def to_sam_label(emotion_label):
     HH: Surprised
     Baseline: Neutral
     '''
-    if emotion_label in ["disgust", "sad"]:
+    #TODO: 다르게 분류한 것도 있어서 그런 레이블로도 시도해보기.
+    if emotion_label in ["sad"]:
         return 0
-    elif emotion_label in ["anger", "fear"]:
+    elif emotion_label in ["anger", "fear", "disgust"]:
         return 1
     elif emotion_label in ["happy"]:
         return 2
@@ -60,7 +61,7 @@ class AESPADataManager():
         self.config_file = config_file
         self.batch_size  = batch_size
     
-    def convert_to_hrv(self, ecg_data, fs=300, distance=150, height=115):
+    def convert_to_hrv(self, ecg_data, fs=300, distance=150, height=100):
         t = np.arange(0., len(ecg_data), 1)
         r_peaks, rr_intervals = utils.calc_rr_intervals(ecg_data, distance=distance, height=height)
 
@@ -71,7 +72,7 @@ class AESPADataManager():
         return heart_rates_interp
 
     
-    def load_dataset(self, target_seq_len = 60000, pad_infront = True, as_hrv = False):        
+    def load_dataset(self, target_seq_len = 60000, pad_infront = True, as_hrv = False, as_sam=False):        
         spatial_transform = [ToTensor()]
         spatial_transform = Compose(spatial_transform)
 
@@ -85,6 +86,7 @@ class AESPADataManager():
             _, readings = utils.load_readings(csv_file, load_only_valid=True)
 
             if as_hrv:
+                # TODO: config file 반영하기.
                 readings = self.convert_to_hrv(readings)
             else:
                 readings = utils.normalize_data(readings, 60, 140)
@@ -96,10 +98,13 @@ class AESPADataManager():
                 diff = target_seq_len - seq_len                    
                 inputs.append(np.concatenate(([-1] * diff, readings)))
 
-            #[:-4]는 clip number와 extension 제거용.
+            #[:-5]는 clip number와 extension 제거용.
             label = csv_file.split('_')[-1][:-5]
-            targets.append(LABEL_TO_INDEX[label])
-            # targets.append(to_sam_label(label))
+
+            if as_sam:
+                targets.append(to_sam_label(label))
+            else:
+                targets.append(LABEL_TO_INDEX[label])
 
         inputs = torch.Tensor(inputs).float().reshape(-1, target_seq_len, 1)
         targets = torch.Tensor(targets).long()
