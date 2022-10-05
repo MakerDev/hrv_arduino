@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
+
 import argparse
 import matplotlib.pyplot as plt
 from torch import autograd
@@ -8,14 +12,12 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torch.nn as nn
 import torch
-from models.aespa_dataset import *
 import utils
 import numpy as np
-import sys
-import os
+
+from models.aespa_dataset import *
 from models.conv1d_net import Conv1dNetwork
 
-sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 
 '''
 https://medium.com/@stepanulyanin/implementing-grad-cam-in-pytorch-ea0937c31e82
@@ -223,12 +225,11 @@ if __name__ == "__main__":
 
     # 입력받을 인자값 설정 (default 값 설정가능)
     parser.add_argument('--epoch', type=int, default=150)
-    parser.add_argument('--batch_size', type=int, default=128)
-    parser.add_argument('--num_classes', type=int, default=7)
+    parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--as_hrv', type=bool, default=True)
     parser.add_argument('--as_sam', type=bool, default=False)
     parser.add_argument('--interpolation', type=bool, default=True)
-    parser.add_argument('--kernel_size', type=int, default=64)
+    parser.add_argument('--kernel_size', type=int, default=128)
     parser.add_argument('--fc_size', type=int, default=256)
     parser.add_argument('--target_seq_len', type=int, default=40000)
 
@@ -239,12 +240,12 @@ if __name__ == "__main__":
     IS_CUDA = torch.cuda.is_available()
     DEVICE = torch.device('cuda:' + str(GPU_NUM) if IS_CUDA else 'cpu')
 
-    MODEL_NAME = f"{'HRV' if args.as_hrv else 'PPG'}_ \
-                    {'KEYWORD' if args.as_sam else 'SAM'}_ \
-                    {'INTERP' if args.interpolation else ''}_ \
-                    K_{args.kernel_size}_\
-                    L_{args.fc_size}_ \
-                    TS_{args.target_seq_len}"
+    MODEL_NAME = f"{'HRV' if args.as_hrv else 'PPG'}_" + \
+                 f"{'KEYWORD' if args.as_sam else 'SAM'}" + \
+                 f"{'INTERP' if args.interpolation else ''}_" + \
+                 f"K_{args.kernel_size}_" + \
+                 f"L_{args.fc_size}_" + \
+                 f"TS_{args.target_seq_len}"
 
     DM = AESPADataManager("./ppgs_sep", batch_size=args.batch_size)
     TRAIN_DATA, TEST_DATA = DM.load_dataset(
@@ -254,14 +255,19 @@ if __name__ == "__main__":
         target_seq_len=args.target_seq_len)
     TRAIN_LOADER, TEST_LOADER = DM.load_dataloader(TRAIN_DATA, TEST_DATA)
 
-    model = Conv1dNetwork(out_channel=args.num_classes, seq_len=args.target_seq_len, 
+    if args.as_sam:
+        num_classes = 5
+    else:
+        num_classes = 7
+
+    model = Conv1dNetwork(out_channel=num_classes, seq_len=args.target_seq_len, 
                             kernel_size=args.kernel_size, fc_size=args.fc_size)
 
     savepoint_dir = f'savepoints/{MODEL_NAME}'
     os.makedirs(savepoint_dir, exist_ok=True)
 
     train(model_name=MODEL_NAME, model=model, train_loader=TRAIN_LOADER, test_loader=TEST_LOADER, 
-        num_classes=args.num_classes, savepoint_dir=f'savepoints', epoch=args.epoch, device=DEVICE)
+        num_classes=num_classes, savepoint_dir=f'savepoints', epoch=args.epoch, device=DEVICE)
 
     # CAM 때문에 test는 배치 1로함.
     _, TRAIN_LOADER = DM.load_dataloader(TRAIN_DATA, TEST_DATA, batch_size=1)
@@ -272,8 +278,8 @@ if __name__ == "__main__":
             pretrained_model_path = os.path.join(savepoint_dir, pth)
             break
 
-    model_cam = Conv1DNetForGradCAM(pretrained_model_path=pretrained_model_path, n_classes=args.num_classes)
+    model_cam = Conv1DNetForGradCAM(pretrained_model_path=pretrained_model_path, n_classes=num_classes)
     cam_save_dir = os.path.join('hrv_pictures', MODEL_NAME)
     os.makedirs(cam_save_dir, exist_ok=True)
 
-    eval(model=model_cam, test_loader=TEST_LOADER, num_classes=args.num_classes, cam_save_dir=cam_save_dir, device=DEVICE)
+    eval(model=model_cam, test_loader=TEST_LOADER, num_classes=num_classes, cam_save_dir=cam_save_dir, device=DEVICE)
