@@ -1,33 +1,36 @@
 
+import argparse
+import matplotlib.pyplot as plt
+from torch import autograd
+import sklearn.metrics as metrics
+from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
+import torch.nn.functional as F
+import torch.optim as optim
+import torch.nn as nn
+import torch
+from models.aespa_dataset import *
+import utils
 import numpy as np
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
-import utils
-from models.aespa_dataset import *
-import torch
-import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
-from tqdm import tqdm
-from torch.utils.tensorboard import SummaryWriter
-import sklearn.metrics as metrics
 
 
 class Conv1dNetwork(nn.Module):
-    def __init__(self, out_channel=7, in_channel=1):
+    def __init__(self, seq_len=60000, out_channel=7, in_channel=1, kernel_size=64, fc_size=1024):
         super(Conv1dNetwork, self).__init__()
         self.conv1d_1 = nn.Conv1d(in_channels=in_channel,
-                                out_channels=16,
-                                kernel_size=32,
-                                stride=4,
-                                padding=1)
+                                  out_channels=16,
+                                  kernel_size=kernel_size,
+                                  stride=16,
+                                  padding=1)
 
         self.conv1d_2 = nn.Conv1d(in_channels=16,
-                                out_channels=32,
-                                kernel_size=32,
-                                stride=4,
-                                padding=1)
+                                  out_channels=32,
+                                  kernel_size=kernel_size,
+                                  stride=16,
+                                  padding=1)
         self.pool = nn.MaxPool1d(4)
         self.dropout = nn.Dropout(0.5)
         self.conv_net = nn.Sequential(
@@ -37,11 +40,11 @@ class Conv1dNetwork(nn.Module):
             self.pool
         )
 
-        flat_size = self.get_flat_size((1, 60000), self.conv_net)
+        flat_size = self.get_flat_size((1, seq_len), self.conv_net)
 
-        self.fc_layer1 = nn.Linear(flat_size, 1024)
-        self.fc_layer2 = nn.Linear(1024, 512)
-        self.fc_layer3 = nn.Linear(512, out_channel)
+        self.fc_layer1 = nn.Linear(flat_size, fc_size)
+        self.fc_layer2 = nn.Linear(fc_size, fc_size//2)
+        self.fc_layer3 = nn.Linear(fc_size//2, out_channel)
         self.fc_net = nn.Sequential(
             self.fc_layer1,
             nn.ReLU(),
@@ -52,79 +55,122 @@ class Conv1dNetwork(nn.Module):
             self.fc_layer3,
             nn.ReLU()
         )
-    
+
     def get_flat_size(self, input_shape, conv_net):
         f = conv_net(torch.Tensor((torch.ones(1, *input_shape))))
         return torch.flatten(f).shape[0]
-
 
     def forward(self, x):
         x = x.transpose(1, 2)
         x = self.conv_net(x)
         # x = x.transpose(1, 2)
         x = torch.flatten(x, 1)
-                
+
         # x = self.dropout(x)
         x = self.fc_net(x)
 
         return x
 
 
+'''
+https://medium.com/@stepanulyanin/implementing-grad-cam-in-pytorch-ea0937c31e82
+https://coderzcolumn.com/tutorials/artificial-intelligence/pytorch-grad-cam
+'''
+class Conv1DNetForGradCAM(nn.Module):
+    def __init__(self, pretrained_model_path="savepoints/aespa_hrv/savepoint_120_83.3_HRV_SAM_TWO_DROPOUTS_K_64_L_512.pth", n_classes=7):
+        super(Conv1DNetForGradCAM, self).__init__()
 
-if __name__ == "__main__":
+        self.conv1dnet = Conv1dNetwork(out_channel=n_classes)
+        self.conv1dnet.load_state_dict(torch.load(pretrained_model_path))
+        self.conv_net = self.conv1dnet.conv_net[:3]
+        self.classifier = self.conv1dnet.fc_net
+        self.conv_layer_output = None
+
+    def forward(self, x):
+        x = x.transpose(1, 2)
+        x = self.conv_net(x)
+        self.conv_layer_output = x
+
+        x = self.conv1dnet.pool(x)
+        x = torch.flatten(x, 1)
+        x = self.classifier(x)
+
+        return x
+
+
+def get_cam_heatmap(pred, model: Conv1DNetForGradCAM):
+    grads = autograd.grad(
+        pred[:, pred.argmax().item()], model.conv_layer_output)
+    pooled_grads = grads[0].mean((0, 2))
+    conv_output = model.conv_layer_output.squeeze()
+    conv_output = F.relu(conv_output)
+    for i in range(len(pooled_grads)):
+        conv_output[i, :] *= pooled_grads[i]
+
+    heatmap = conv_output.mean(dim=0).squeeze()
+    # Normalize heatmap
+    #heatmap = F.relu(heatmap) / torch.max(heatmap)
+    heatmap = heatmap / torch.max(heatmap)
+    heatmap = heatmap.detach()
+
+    return heatmap
+
+
+def save_cam_heatmap(filename, pred, model, x):
+    heatmap = get_cam_heatmap(pred, model)
+    x = x.cpu().detach()
+    heatmap = heatmap.cpu().detach()
+    plt.figure(figsize=(28, 4))
+    plt.imshow(np.expand_dims(heatmap, axis=0), cmap='Reds', aspect="auto",
+               interpolation='nearest', extent=[0, 60000, x.min(), x.max()], alpha=0.5)
+    plt.plot(x.squeeze(), 'k')
+    plt.colorbar()
+    plt.savefig(filename)
+
+
+def print_report_and_confusion_matrix(result_pred, result_anno, num_classes):
+    result_pred = np.array(result_pred).reshape(-1, num_classes)
+    result_pred = [np.argmax(pred) for pred in result_pred]
+    result_pred_np = np.array(result_pred).reshape(-1, 1).squeeze()
+    result_anno_np = np.array(result_anno).reshape(-1, 1).squeeze()
+
+    conf_mat = metrics.confusion_matrix(result_anno_np, result_pred_np)
+    print(metrics.classification_report(result_anno_np, result_pred_np, zero_division=0))
+    print(conf_mat)
+
+
+def train(model_name, model, train_loader, test_loader, num_classes, savepoint_dir, epoch=200, device='cuda:0'):
     # region Settings
-    BATCH_SIZE  = 4
-    NUM_CLASSES = 5
-
     ''''''''''''''''''''''''''''''''''''
     '''          Need to tune        '''
     ''''''''''''''''''''''''''''''''''''
-    LEARNING_RATE  = 0.00005 # L1
+    LEARNING_RATE = 0.00005  # L1
     # LEARNING_RATE  = 0.00005 # L1
     L2WEIGHT_DECAY = 0.00005  # L2
     ''''''''''''''''''''''''''''''''''''
-
-    EPOCHS        = 300
-    GPU_NUM       = 0
-    IS_CUDA = torch.cuda.is_available()
-    DEVICE  = torch.device('cuda:' + str(GPU_NUM) if IS_CUDA else 'cpu')
     # endregion
-    MODEL_NAME    = "ASEPA_PPG_SAM_TWO_DROPOUT"
-    
-    TB_LOG_DIR = f"tb_logs/{MODEL_NAME.lower()}"
-    
-    if not os.path.exists(TB_LOG_DIR):
-        os.mkdir(TB_LOG_DIR)
 
-    writer = SummaryWriter(TB_LOG_DIR, comment=f'K_32_{MODEL_NAME}', filename_suffix=MODEL_NAME)
+    TB_LOG_DIR = f"tb_logs/{model_name.lower()}"
+    os.makedirs(TB_LOG_DIR, exist_ok=True)
 
-    # region TRAINING
-    DM = AESPADataManager("./ppgs_sep", BATCH_SIZE)
-    TRAIN_PPG_DATA, TEST_PPG_DATA = DM.load_dataset(as_hrv=True, as_sam=True)
-    TRAIN_LOADER, TEST_LOADER     = DM.load_dataloader(TRAIN_PPG_DATA, TEST_PPG_DATA)
+    writer = SummaryWriter(TB_LOG_DIR, comment=f'{model_name}', filename_suffix=model_name)
     criterion = nn.CrossEntropyLoss().to(DEVICE)
 
-    # MODEL = Conv1d_LSTM(out_channel=NUM_CLASSES)
-    MODEL = Conv1dNetwork(out_channel=NUM_CLASSES)
+    # region TRAINING
+    model.to(device)
 
-    LOAD_MODEL = False
-    if LOAD_MODEL:
-        MODEL.load_state_dict(torch.load("savepoints/savepoint_back_50_84.2.pth"))
-        
-    MODEL.to(DEVICE)
+    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=L2WEIGHT_DECAY)
 
-    optimizer = optim.Adam(MODEL.parameters(), lr = LEARNING_RATE)
-    
     best_acc = 0.0
-    for epoch in range(1, EPOCHS+1):
-        MODEL.train()
+    for epoch in range(1, epoch+1):
+        model.train()
         total_loss = []
         total_acc = []
-        with tqdm(TRAIN_LOADER, unit='batch') as train_epoch:
+        with tqdm(train_loader, unit='batch') as train_epoch:
             for i, (inputs, targets) in enumerate(train_epoch):
-                inputs = inputs.to(DEVICE)
-                targets = targets.to(DEVICE)
-                outputs = MODEL(inputs)
+                inputs = inputs.to(device)
+                targets = targets.to(device)
+                outputs = model(inputs)
 
                 loss = criterion(outputs, targets)
                 acc = utils.calculate_accuracy(outputs, targets)
@@ -135,7 +181,7 @@ if __name__ == "__main__":
                 loss.backward()
                 optimizer.step()
 
-                train_epoch.set_description(f'Training epoch {epoch}->')    
+                train_epoch.set_description(f'Training epoch {epoch}->')
 
         train_loss = np.mean(total_loss)
         train_acc = np.mean(total_acc)
@@ -149,16 +195,16 @@ if __name__ == "__main__":
         result_pred = []
         result_anno = []
 
-        MODEL.eval()
+        model.eval()
         with torch.no_grad():
-            with tqdm(TEST_LOADER, unit='batch') as test_epoch:
+            with tqdm(test_loader, unit='batch') as test_epoch:
                 for val_inputs, val_targets in test_epoch:
-                    val_inputs = val_inputs.to(DEVICE)
-                    val_targets = val_targets.to(DEVICE)
-                    val_outputs = MODEL(val_inputs)
+                    val_inputs = val_inputs.to(device)
+                    val_targets = val_targets.to(device)
+                    val_outputs = model(val_inputs)
 
                     val_loss = criterion(val_outputs, val_targets)
-                    val_acc = utils.calculate_accuracy(val_outputs, val_targets)          
+                    val_acc = utils.calculate_accuracy(val_outputs, val_targets)
                     result_pred.append(val_outputs.cpu().detach().numpy())
                     result_anno.append(val_targets.cpu().detach().numpy())
 
@@ -168,26 +214,120 @@ if __name__ == "__main__":
 
         total_loss_mean = np.mean(total_loss)
         total_acc_mean = np.mean(total_acc)
+
         writer.add_scalar('validation loss', total_loss_mean, epoch)
         writer.add_scalar('validation accuracy', total_acc_mean, epoch)
-        result_pred = np.array(result_pred).reshape(-1, NUM_CLASSES)
-        result_pred = [np.argmax(pred) for pred in result_pred]
-        result_pred_np = np.array(result_pred).reshape(-1, 1).squeeze()
-        result_anno_np = np.array(result_anno).reshape(-1, 1).squeeze()
 
         print(f'loss {total_loss_mean:.3f} | Acc {total_acc_mean:.3f}')
-        conf_mat = metrics.confusion_matrix(result_anno_np, result_pred_np)
-        print(metrics.classification_report(result_anno_np, result_pred_np, zero_division=0))
-        print(conf_mat)
+        print_report_and_confusion_matrix(result_pred, result_anno, num_classes)
 
         if epoch in [10, 20, 30, 50, 70, 85, 100, 120, 150, 170, 200, 250, 500]:
-            torch.save(MODEL.state_dict(), f"savepoints/aespa_hrv/savepoint_{epoch}_{total_acc_mean*100:.1f}_{MODEL_NAME}.pth")
+            torch.save(model.state_dict(), os.path.join(savepoint_dir, f"{model_name}_{epoch}_{total_acc_mean*100:.1f}.pth"))
+        elif epoch >= 100 and total_acc_mean > best_acc:
+            torch.save(model.state_dict(), os.path.join(savepoint_dir, f"{model_name}_{epoch}_{total_acc_mean*100:.1f}.pth"))
         
-        if epoch >= 100 and total_acc_mean > best_acc:
-            torch.save(MODEL.state_dict(), f"savepoints/aespa_hrv/savepoint_{epoch}_{total_acc_mean*100:.1f}_{MODEL_NAME}.pth")
         best_acc = max(total_acc_mean, best_acc)
-
         print(f'Best so far: {best_acc*100:.1f}%\n')
-    
+
     writer.close()
-    torch.save(MODEL.state_dict(), f"savepoints/aespa_hrv/savepoint_{epoch}_{MODEL_NAME}.pth")
+    torch.save(model.state_dict(), os.path.join(savepoint_dir, f"{model_name}_{epoch}_{total_acc_mean*100:.1f}.pth"))
+
+
+def eval(model, test_loader, num_classes, cam_save_dir=None, device='cuda:0'):
+    # region TRAINING
+    criterion = nn.CrossEntropyLoss().to(device)
+
+    model.to(device)
+    model.eval()
+
+    total_loss = []
+    total_acc = []
+    result_pred = []
+    result_anno = []
+
+    # with torch.no_grad():
+    # heatmap 계산을 위해서 no_grad는 끈다.
+    with tqdm(test_loader, unit='batch') as test_epoch:
+        for i, (val_inputs, val_targets) in enumerate(test_epoch):
+            val_inputs = val_inputs.to(device)
+            val_targets = val_targets.to(device)
+            val_outputs = model(val_inputs)
+            
+            if cam_save_dir != None:
+                filepath = os.path.join(cam_save_dir, f'{i}_pred_{val_outputs.argmax().item()}_label_{val_targets.item()}.png')
+                save_cam_heatmap(filepath, val_outputs, model, val_inputs)
+
+            val_loss = criterion(val_outputs, val_targets)
+            val_acc = utils.calculate_accuracy(val_outputs, val_targets)
+            result_pred.append(val_outputs.cpu().detach().numpy())
+            result_anno.append(val_targets.cpu().detach().numpy())
+
+            total_loss.append(val_loss.cpu().detach().numpy())
+            total_acc.append(val_acc)
+            test_epoch.set_description(f'Evaluating...->')
+
+    total_loss_mean = np.mean(total_loss)
+    total_acc_mean = np.mean(total_acc)
+    print(f'loss {total_loss_mean:.3f} | Acc {total_acc_mean:.3f}')
+
+
+if __name__ == "__main__":
+    # 인자값을 받을 수 있는 인스턴스 생성
+    parser = argparse.ArgumentParser(description='Argparse Tutorial')
+
+    # 입력받을 인자값 설정 (default 값 설정가능)
+    parser.add_argument('--epoch', type=int, default=150)
+    parser.add_argument('--batch_size', type=int, default=128)
+    parser.add_argument('--num_classes', type=int, default=7)
+    parser.add_argument('--as_hrv', type=bool, default=True)
+    parser.add_argument('--as_sam', type=bool, default=False)
+    parser.add_argument('--interpolation', type=bool, default=True)
+    parser.add_argument('--kernel_size', type=int, default=64)
+    parser.add_argument('--fc_size', type=int, default=256)
+    parser.add_argument('--target_seq_len', type=int, default=40000)
+
+    args = parser.parse_args()
+
+    # TODO: 쉘로 파라미터 다 받아서 실행 할 수 있도록 구성하기.
+    GPU_NUM = 0
+    IS_CUDA = torch.cuda.is_available()
+    DEVICE = torch.device('cuda:' + str(GPU_NUM) if IS_CUDA else 'cpu')
+
+    MODEL_NAME = f"{'HRV' if args.as_hrv else 'PPG'}_ \
+                    {'KEYWORD' if args.as_sam else 'SAM'}_ \
+                    {'INTERP' if args.interpolation else ''}_ \
+                    K_{args.kernel_size}_\
+                    L_{args.fc_size}_ \
+                    TS_{args.target_seq_len}"
+
+    DM = AESPADataManager("./ppgs_sep", batch_size=args.batch_size)
+    TRAIN_DATA, TEST_DATA = DM.load_dataset(
+        as_hrv=args.as_hrv,
+        as_sam=args.as_sam,
+        interpolation=args.interpolation,
+        target_seq_len=args.target_seq_len)
+    TRAIN_LOADER, TEST_LOADER = DM.load_dataloader(TRAIN_DATA, TEST_DATA)
+
+    model = Conv1dNetwork(out_channel=args.num_classes, seq_len=args.target_seq_len, 
+                            kernel_size=args.kernel_size, fc_size=args.fc_size)
+
+    savepoint_dir = f'savepoints/{MODEL_NAME}'
+    os.makedirs(savepoint_dir, exist_ok=True)
+
+    train(model_name=MODEL_NAME, model=model, train_loader=TRAIN_LOADER, test_loader=TEST_LOADER, 
+        num_classes=args.num_classes, savepoint_dir=f'savepoints', epoch=args.epoch, device=DEVICE)
+
+    # CAM 때문에 test는 배치 1로함.
+    _, TRAIN_LOADER = DM.load_dataloader(TRAIN_DATA, TEST_DATA, batch_size=1)
+
+    #TODO: 가장 잘 된 모델 찾기
+    for pth in os.listdir(savepoint_dir):
+        if f'{args.epoch}' in pth:
+            pretrained_model_path = os.path.join(savepoint_dir, pth)
+            break
+
+    model_cam = Conv1DNetForGradCAM(pretrained_model_path=pretrained_model_path, n_classes=args.num_classes)
+    cam_save_dir = os.path.join('hrv_pictures', MODEL_NAME)
+    os.makedirs(cam_save_dir, exist_ok=True)
+
+    eval(model=model_cam, test_loader=TEST_LOADER, num_classes=args.num_classes, cam_save_dir=cam_save_dir, device=DEVICE)
