@@ -40,7 +40,7 @@ def capture_second_range(start_row, timestamps):
 def jump_clip_by(start_row, clip_len, fs_csv, fs_video=25):
     '''
     시작 행으로부터, clip_len만큼 앞으로 가기
-    
+
     return 그만큼 앞으로 간 결과
     '''
     seconds = int(math.trunc(clip_len))
@@ -110,16 +110,20 @@ def resample_csv_internal(timestamps, readings, target_fs):
 
     current_row = 0
 
-    stat = []
     while True:
         current_row, next_sceond_row = capture_second_range(
             current_row, timestamps)
 
         frames_in_second = next_sceond_row - current_row
-        stat.append(frames_in_second)
         if frames_in_second<=0:
             break
-        
+
+        #TODO : target_fs대비 일정 비율 만큼도 없으면 아예 그 second는 날려버리기?
+        # 20%보다도 적은 샘플밖에 없으면 녹화 안된걸로 친다.
+        if next_sceond_row - current_row < target_fs * 0.1:
+            current_row = next_sceond_row
+            continue
+
         # Sampling
         indices = list(range(current_row, next_sceond_row))
         if frames_in_second < target_fs:
@@ -127,11 +131,11 @@ def resample_csv_internal(timestamps, readings, target_fs):
             indices.extend(list(np.random.choice(indices, target_fs - frames_in_second)))
             indices.sort()
         elif frames_in_second > target_fs:
-            indices = sorted(random.sample(indices, target_fs))        
+            indices = sorted(random.sample(indices, target_fs))
 
         timestamps_resampled.extend([timestamps[i] for i in indices])
+        # readings_resampled.extend([readings[i] for i in indices])
 
-        #TODO : target_fs대비 일정 비율 만큼도 없으면 아예 그 second는 날려버리기?
         if next_sceond_row - current_row >= 3:
             current_readings_resampled = utils.up_down_sampling(readings[current_row:next_sceond_row], up_size=target_fs)
         else:
@@ -143,17 +147,14 @@ def resample_csv_internal(timestamps, readings, target_fs):
 
 
 def resample_csv(path, resampled_csv_path, fs=300):
-    timestamps, readings = utils.load_readings(path, apply_filter=False)
+    timestamps, readings = utils.load_readings(path, offset=400, apply_filter=False)
 
-    #TODO: clip_start_timestamp를 21:22:47.16 이런식으로 받아서 샘플링 후 fs를 기준으로 굳이 우리가 계산안해도 어디가 시작 frame인지 알도록 하기
-    #만약 120으로 샘플링 했는데 위처럼 timestamp가 주어지면 21:22:47의 64번째 row가 시작 frame이 될 것.
-    #start_row에서 보험용으로 200개 더.
     start_row = 200
     timestamps = timestamps[start_row-200:]
     readings = readings[start_row-200:]
     timestamps, readings = resample_csv_internal(timestamps, readings, fs)
     timestamps, readings = fill_empty_timestamps(timestamps, readings, fs)
-    record_date = path.split(' ')[0]
+    record_date = os.path.basename(path).split(' ')[0]
 
     #export resampled readings    
     with open(resampled_csv_path, 'w', newline='') as f:
@@ -170,16 +171,16 @@ if __name__ == "__main__":
     timestamps = []
     readings = []
     folder = 'ppgs'
-    filename = '2022-08-20 20-34-23_suan.csv'
+    filename = '2022-08-26 21-21-20_김기현.csv'
     
     csv_files = os.listdir(folder)
     record_date = filename.split(' ')[0]
 
     path = os.path.join(folder, filename)
-    resampled_file_path = path.replace('.csv', '_resampled_interp.csv')
+    resampled_file_path = path.replace('.csv', '_resampled.csv')
     fs = 300
     if not os.path.exists(resampled_file_path):
-        timestamps, readings = resample_csv(path, resampled_file_path, fs)            
+        timestamps, readings = resample_csv(path, resampled_file_path, fs)
     else:
         timestamps, readings = utils.load_readings(resampled_file_path, offset=0, apply_filter=False)
 
@@ -198,8 +199,6 @@ if __name__ == "__main__":
     clip_label_lens     = [3.24, 3.04, 4.0, 3.24, 3.24, 3.23, 3.24, 3.24, 3.24, 3.24, 3.24, 3.24, 4.0]
     #쉬어가기 1~13까지 존재
     cooldown_lable_lens = [2.15, 2.19, 2.19, 2.19, 2.14, 2.18, 2.20, 2.17, 2.19, 2.20, 2.19, 2.19, 2.19]
-    
-    exit()
 
     #.csv 확장자 제거를 위해 뒤에서 4개는 제거.
     folder = f"ppgs_sep/{filename.split('_')[1][:-4]}"
@@ -208,7 +207,7 @@ if __name__ == "__main__":
         os.mkdir(folder)
 
     #Divide PPG raw datas.
-    start_row = 80916
+    start_row = int(input("Enter the first clip row: "))
     for i, clip_len in enumerate(clip_lens):
         next_clip_start_row = jump_clip_by(start_row, clip_len, fs, fs_video)
         clip_readings = readings[start_row:next_clip_start_row]
