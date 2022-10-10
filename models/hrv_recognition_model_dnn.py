@@ -12,6 +12,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 import sklearn.metrics as metrics
+from models.Conv1DNet import Conv1dNetwork
 
 # TODO : LSTM없는 그냥 Conv1D만 쓰고 마지막에 concat후 dense 레이어로 가는 모델 만들기.
 
@@ -20,13 +21,13 @@ class Conv1d_LSTM(nn.Module):
         super(Conv1d_LSTM, self).__init__()
         self.conv1d_1 = nn.Conv1d(in_channels=in_channel,
                                 out_channels=16,
-                                kernel_size=5,
-                                stride=1,
+                                kernel_size=64,
+                                stride=16,
                                 padding=1)
         self.conv1d_2 = nn.Conv1d(in_channels=16,
                                 out_channels=32,
-                                kernel_size=5,
-                                stride=1,
+                                kernel_size=64,
+                                stride=16,
                                 padding=1)
 
         self.lstm = nn.LSTM(input_size=32,
@@ -36,7 +37,7 @@ class Conv1d_LSTM(nn.Module):
                             bidirectional=False,
                             batch_first=True)
         
-        self.dropout = nn.Dropout(0.3)
+        self.dropout = nn.Dropout(0.5)
     
         self.fc_layer1 = nn.Linear(50, 32)
         self.fc_layer2 = nn.Linear(32, out_channel)
@@ -69,62 +70,62 @@ class Conv1d_LSTM(nn.Module):
 
         return x
 
-class Conv1dNetwork(nn.Module):
-    def __init__(self, out_channel=5, in_channel=1):
-        super(Conv1dNetwork, self).__init__()
-        self.conv1d_1 = nn.Conv1d(in_channels=in_channel,
-                                out_channels=16,
-                                kernel_size=64,
-                                stride=16,
-                                padding=1)
-        self.conv1d_2 = nn.Conv1d(in_channels=16,
-                                out_channels=32,
-                                kernel_size=64,
-                                stride=16,
-                                padding=1)
+# class Conv1dNetwork(nn.Module):
+#     def __init__(self, out_channel=5, in_channel=1):
+#         super(Conv1dNetwork, self).__init__()
+#         self.conv1d_1 = nn.Conv1d(in_channels=in_channel,
+#                                 out_channels=16,
+#                                 kernel_size=64,
+#                                 stride=16,
+#                                 padding=1)
+#         self.conv1d_2 = nn.Conv1d(in_channels=16,
+#                                 out_channels=32,
+#                                 kernel_size=64,
+#                                 stride=16,
+#                                 padding=1)
         
-        self.pool = nn.MaxPool1d(4)
-        self.fc_layer1 = nn.Linear(2688, 1024)
-        self.fc_layer2 = nn.Linear(1024, 512)
-        self.fc_layer3 = nn.Linear(512, out_channel)
+#         self.pool = nn.MaxPool1d(4)
+#         self.fc_layer1 = nn.Linear(2688, 1024)
+#         self.fc_layer2 = nn.Linear(1024, 512)
+#         self.fc_layer3 = nn.Linear(512, out_channel)
 
-    def forward(self, x):
-	    # Raw x shape : (B, S, F) => (B, 10, 3)        
-        # B: Batch, S: Sequence Length, F: Features.
-        # In hrv case, feature channel is 1
-        # Shape : (B, F, S) => (B, 3, 10)
-        x = x.transpose(1, 2)
-        # Shape : (B, F, S) == (B, C, S) // C = channel => (B, 16, 10)
-        x = self.pool(self.conv1d_1(x))
-        # Shape : (B, C, S) => (B, 32, 10)
-        x = self.pool(self.conv1d_2(x))
-        # Shape : (B, S, C) == (B, S, F) => (B, 10, 32)
-        # x = x.transpose(1, 2)
-        x = torch.flatten(x, 1)
+#     def forward(self, x):
+# 	    # Raw x shape : (B, S, F) => (B, 10, 3)        
+#         # B: Batch, S: Sequence Length, F: Features.
+#         # In hrv case, feature channel is 1
+#         # Shape : (B, F, S) => (B, 3, 10)
+#         x = x.transpose(1, 2)
+#         # Shape : (B, F, S) == (B, C, S) // C = channel => (B, 16, 10)
+#         x = self.pool(self.conv1d_1(x))
+#         # Shape : (B, C, S) => (B, 32, 10)
+#         x = self.pool(self.conv1d_2(x))
+#         # Shape : (B, S, C) == (B, S, F) => (B, 10, 32)
+#         # x = x.transpose(1, 2)
+#         x = torch.flatten(x, 1)
                 
-        # Shape : (B, H) => (B, 50)
-        # x = self.dropout(x)
-        # Shape : (B, 32)
-        x = F.relu(self.fc_layer1(x))
-        # Shape : (B, O) // O = output => (B, 1)
-        x = F.relu(self.fc_layer2(x))
-        x = F.relu(self.fc_layer3(x))
+#         # Shape : (B, H) => (B, 50)
+#         # x = self.dropout(x)
+#         # Shape : (B, 32)
+#         x = F.relu(self.fc_layer1(x))
+#         # Shape : (B, O) // O = output => (B, 1)
+#         x = F.relu(self.fc_layer2(x))
+#         x = F.relu(self.fc_layer3(x))
 
-        return x
+#         return x
 
 
 
 if __name__ == "__main__":
     # region Settings
-    BATCH_SIZE  = 4
+    BATCH_SIZE  = 8
     NUM_CLASSES = 5
 
     ''''''''''''''''''''''''''''''''''''
     '''          Need to tune        '''
     ''''''''''''''''''''''''''''''''''''
-    LEARNING_RATE  = 0.0001 # L1
+    LEARNING_RATE  = 0.00005 # L1
     # LEARNING_RATE  = 0.00005 # L1
-    L2WEIGHT_DECAY = 0.0001  # L2
+    L2WEIGHT_DECAY = 0.00005  # L2
     ''''''''''''''''''''''''''''''''''''
 
     EPOCHS        = 300
@@ -137,12 +138,12 @@ if __name__ == "__main__":
 
     # region TRAINING
     DM = HRVDataManager("./vreed_dataset", BATCH_SIZE)
-    TRAIN_ECG_DATA, TEST_ECG_DATA = DM.load_dataset(as_hrv=True)
+    TRAIN_ECG_DATA, TEST_ECG_DATA = DM.load_dataset(as_hrv=True, interpolation=True, target_seq_len=35000)
     TRAIN_LOADER, TEST_LOADER     = DM.load_dataloader(TRAIN_ECG_DATA, TEST_ECG_DATA)
     criterion = nn.CrossEntropyLoss().to(DEVICE)
 
-    # MODEL = Conv1d_LSTM(out_channel=NUM_CLASSES)
-    MODEL = Conv1dNetwork(out_channel=NUM_CLASSES)
+    MODEL = Conv1d_LSTM(out_channel=NUM_CLASSES)
+    # MODEL = Conv1dNetwork(out_channel=NUM_CLASSES, seq_len=350000, fc_size=512, kernel_size=64)
 
     LOAD_MODEL = False
     if LOAD_MODEL:
@@ -217,7 +218,7 @@ if __name__ == "__main__":
         print(metrics.classification_report(result_anno_np, result_pred_np))
         print(conf_mat)
 
-        if epoch in [10, 20, 30, 50, 70, 85, 100, 120, 150, 170, 200, 250, 500]:
+        if epoch in [50, 70, 85, 100, 120, 150, 170, 200, 250, 500]:
             torch.save(MODEL.state_dict(), f"savepoints/vreed_hrv/savepoint_{epoch}_{total_acc_mean*100:.1f}.pth")
         
         if epoch >= 100 and total_acc_mean > best_acc:

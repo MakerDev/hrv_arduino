@@ -16,7 +16,7 @@ import utils
 import numpy as np
 
 from models.aespa_dataset import *
-from models.conv1d_net import Conv1dNetwork
+from models.Conv1DNet import Conv1dNetwork
 
 
 '''
@@ -170,7 +170,7 @@ def train(model_name, model, train_loader, test_loader, num_classes, savepoint_d
 
         if epoch in [10, 20, 30, 50, 70, 85, 100, 120, 150, 170, 200, 250, 500]:
             torch.save(model.state_dict(), os.path.join(savepoint_dir, f"{model_name}_{epoch}_{total_acc_mean*100:.1f}.pth"))
-        elif epoch >= 100 and total_acc_mean > best_acc:
+        elif epoch >= 50 and total_acc_mean > best_acc:
             torch.save(model.state_dict(), os.path.join(savepoint_dir, f"{model_name}_{epoch}_{total_acc_mean*100:.1f}.pth"))
         
         best_acc = max(total_acc_mean, best_acc)
@@ -221,16 +221,16 @@ def eval(model, test_loader, num_classes, cam_save_dir=None, device='cuda:0'):
 
 if __name__ == "__main__":
     # 인자값을 받을 수 있는 인스턴스 생성
-    parser = argparse.ArgumentParser(description='Argparse Tutorial')
+    parser = argparse.ArgumentParser(description='AESPA arg parser')
 
     # 입력받을 인자값 설정 (default 값 설정가능)
     parser.add_argument('--epoch', type=int, default=150)
     parser.add_argument('--batch_size', type=int, default=4)
-    parser.add_argument('--as_hrv', type=bool, default=True)
+    parser.add_argument('--as_hrv', type=bool, default=False)
     parser.add_argument('--as_sam', type=bool, default=False)
     parser.add_argument('--interpolation', type=bool, default=True)
     parser.add_argument('--kernel_size', type=int, default=128)
-    parser.add_argument('--fc_size', type=int, default=256)
+    parser.add_argument('--fc_size', type=int, default=512)
     parser.add_argument('--target_seq_len', type=int, default=40000)
 
     args = parser.parse_args()
@@ -240,12 +240,14 @@ if __name__ == "__main__":
     IS_CUDA = torch.cuda.is_available()
     DEVICE = torch.device('cuda:' + str(GPU_NUM) if IS_CUDA else 'cpu')
 
+    COMMENT    = ''
     MODEL_NAME = f"{'HRV' if args.as_hrv else 'PPG'}_" + \
-                 f"{'KEYWORD' if args.as_sam else 'SAM'}" + \
+                 f"{'SAM' if args.as_sam else 'KEYWORD'}_" + \
                  f"{'INTERP' if args.interpolation else ''}_" + \
                  f"K_{args.kernel_size}_" + \
                  f"L_{args.fc_size}_" + \
-                 f"TS_{args.target_seq_len}"
+                 f"TS_{args.target_seq_len}" + COMMENT
+
 
     DM = AESPADataManager("./ppgs_sep", batch_size=args.batch_size)
     TRAIN_DATA, TEST_DATA = DM.load_dataset(
@@ -267,7 +269,7 @@ if __name__ == "__main__":
     os.makedirs(savepoint_dir, exist_ok=True)
 
     train(model_name=MODEL_NAME, model=model, train_loader=TRAIN_LOADER, test_loader=TEST_LOADER, 
-        num_classes=num_classes, savepoint_dir=f'savepoints', epoch=args.epoch, device=DEVICE)
+        num_classes=num_classes, savepoint_dir=savepoint_dir, epoch=args.epoch, device=DEVICE)
 
     # CAM 때문에 test는 배치 1로함.
     _, TRAIN_LOADER = DM.load_dataloader(TRAIN_DATA, TEST_DATA, batch_size=1)

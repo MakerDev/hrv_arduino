@@ -22,7 +22,7 @@ class Conv1dNetwork(nn.Module):
             self.conv1d_1,
             self.pool,
             self.conv1d_2,
-            self.pool
+            self.pool,
         )
 
         flat_size = self.get_flat_size((1, seq_len), self.conv_net)
