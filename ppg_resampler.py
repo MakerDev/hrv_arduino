@@ -186,9 +186,6 @@ if __name__ == "__main__":
 
     fs_video = 25
 
-    clip_label_len = 4
-    cooldown_label_len = 2.15
-    cooldown_clip_len = 35
     #NOTICE: 아래의 frame들은 fps 25를 기준으로 맞춰진것임. 따라서 25의 배수로 sampling 하는것이 추후 계산시에 편할 것.
     clip_lens = [201.06, 148.0, 54.11, 208.14, 96.18, 142.20,
                  111.23, 131.12, 106.06, 64.22, 126.20, 128.09, 151.09, 40.06]
