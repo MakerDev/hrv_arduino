@@ -20,11 +20,14 @@ class Conv1dNetwork(nn.Module):
         self.dropout = nn.Dropout(0.5)
         self.conv_net = nn.Sequential(
             self.conv1d_1,
+            nn.BatchNorm1d(16),
             self.pool,
             self.conv1d_2,
+            nn.BatchNorm1d(32),
             self.pool,
         )
 
+        #TODO: Add batchnorm. plus deepen fc layers
         flat_size = self.get_flat_size((1, seq_len), self.conv_net)
 
         self.fc_layer1 = nn.Linear(flat_size, fc_size)
@@ -33,9 +36,11 @@ class Conv1dNetwork(nn.Module):
         self.fc_net = nn.Sequential(
             self.fc_layer1,
             nn.ReLU(),
+            nn.BatchNorm1d(fc_size),
             self.dropout,
             self.fc_layer2,
             nn.ReLU(),
+            nn.BatchNorm1d(fc_size//2),
             self.dropout,
             self.fc_layer3,
             nn.ReLU()
