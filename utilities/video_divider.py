@@ -4,7 +4,7 @@ import numpy as np
 import csv
 import random
 import math
-import utils
+import utilities.utils as utils
 import datetime
 from moviepy.editor import *
 
