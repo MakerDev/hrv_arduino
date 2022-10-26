@@ -39,7 +39,7 @@ class HRVDataManager():
         return heart_rates_interp
 
     
-    def load_dataset(self, target_seq_len = 350000, pad_infront = True, as_hrv = False):        
+    def load_dataset(self, target_seq_len = 350000, pad_infront = True, as_hrv = False, interpolation=True):        
         spatial_transform = [ToTensor()]
         spatial_transform = Compose(spatial_transform)
 
@@ -64,11 +64,16 @@ class HRVDataManager():
                         continue
 
                 data_seq_len = len(ecg_data)
-                if data_seq_len >= target_seq_len:
-                    inputs.append(ecg_data[:target_seq_len])
+
+                if interpolation:
+                    ecg_data = utils.up_down_sampling(ecg_data, target_seq_len)
+                    inputs.append(ecg_data)
                 else:
-                    diff = target_seq_len - data_seq_len                    
-                    inputs.append(np.concatenate(([-1] * diff, ecg_data)))
+                    if data_seq_len >= target_seq_len:
+                        inputs.append(ecg_data[:target_seq_len])
+                    else:
+                        diff = target_seq_len - data_seq_len                    
+                        inputs.append(np.concatenate(([-1] * diff, ecg_data)))
             
                 targets.append(labels[i])
 
