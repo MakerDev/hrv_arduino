@@ -2,6 +2,33 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+def sf(float_input):
+    scientific_output = np.format_float_scientific(float_input, trim='-', precision=0, exp_digits=2)
+    return scientific_output
+
+def get_inplanes():
+    return [64, 128, 256, 512]
+
+def generate_model(model_depth, **kwargs):
+    assert model_depth in [10, 18, 34, 50, 101, 152, 200]
+
+    if model_depth == 10:
+        model = ResNet(BasicBlock, [1, 1, 1, 1], get_inplanes(), **kwargs)
+    elif model_depth == 18:
+        model = ResNet(BasicBlock, [2, 2, 2, 2], get_inplanes(), **kwargs)
+    elif model_depth == 34:
+        model = ResNet(BasicBlock, [3, 4, 6, 3], get_inplanes(), **kwargs)
+    elif model_depth == 50:
+        model = ResNet(Bottleneck, [3, 4, 6, 3], get_inplanes(), **kwargs)
+    elif model_depth == 101:
+        model = ResNet(Bottleneck, [3, 4, 23, 3], get_inplanes(), **kwargs)
+    elif model_depth == 152:
+        model = ResNet(Bottleneck, [3, 8, 36, 3], get_inplanes(), **kwargs)
+    elif model_depth == 200:
+        model = ResNet(Bottleneck, [3, 24, 36, 3], get_inplanes(), **kwargs)
+
+    return model
+
 def conv3x3x3(in_planes, out_planes, stride=1):
     return nn.Conv3d(in_planes,
                      out_planes,
@@ -109,7 +136,7 @@ class ResNet(nn.Module):
 
         self.in_planes = block_inplanes[0]
         self.no_max_pool = no_max_pool
-
+        
         self.conv1 = nn.Conv3d(n_input_channels,
                                self.in_planes,
                                kernel_size=(conv1_t_size, 7, 7),
@@ -139,6 +166,8 @@ class ResNet(nn.Module):
 
         self.avgpool = nn.AdaptiveAvgPool3d((1, 1, 1))
         self.fc = nn.Linear(block_inplanes[3] * block.expansion, n_classes)
+
+        self.flat_size = self.get_flat_size((1, 700, 59, 6))
 
         for m in self.modules():
             if isinstance(m, nn.Conv3d):
@@ -184,7 +213,32 @@ class ResNet(nn.Module):
 
         return nn.Sequential(*layers)
 
+    def get_flat_size(self, input_shape):
+        f = self.get_feature(torch.Tensor((torch.ones(1, *input_shape))))
+        # return torch.flatten(f).shape[0]
+        return f.shape[1]
+
     def forward(self, x):
+        # x = self.conv1(x)
+        # x = self.bn1(x)
+        # x = self.relu(x)
+        # if not self.no_max_pool:
+        #     x = self.maxpool(x)
+
+        # x = self.layer1(x)
+        # x = self.layer2(x)
+        # x = self.layer3(x)
+        # x = self.layer4(x)
+
+        # x = self.avgpool(x)
+
+        # x = x.view(x.size(0), -1)
+        x = self.get_feature(x)
+        x = self.fc(x)
+
+        return x
+
+    def get_feature(self, x):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -199,6 +253,4 @@ class ResNet(nn.Module):
         x = self.avgpool(x)
 
         x = x.view(x.size(0), -1)
-        x = self.fc(x)
-
         return x

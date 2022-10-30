@@ -2,7 +2,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 
-import utils
+import utilities.utils as utils
 import numpy as np
 from tqdm.notebook import tqdm
 
@@ -16,32 +16,6 @@ import sklearn.metrics as metrics
 
 from torch.utils.tensorboard import SummaryWriter
 
-def sf(float_input):
-    scientific_output = np.format_float_scientific(float_input, trim='-', precision=0, exp_digits=2)
-    return scientific_output
-
-def get_inplanes():
-    return [64, 128, 256, 512]
-
-def generate_model(model_depth, **kwargs):
-    assert model_depth in [10, 18, 34, 50, 101, 152, 200]
-
-    if model_depth == 10:
-        model = ResNet(BasicBlock, [1, 1, 1, 1], get_inplanes(), **kwargs)
-    elif model_depth == 18:
-        model = ResNet(BasicBlock, [2, 2, 2, 2], get_inplanes(), **kwargs)
-    elif model_depth == 34:
-        model = ResNet(BasicBlock, [3, 4, 6, 3], get_inplanes(), **kwargs)
-    elif model_depth == 50:
-        model = ResNet(Bottleneck, [3, 4, 6, 3], get_inplanes(), **kwargs)
-    elif model_depth == 101:
-        model = ResNet(Bottleneck, [3, 4, 23, 3], get_inplanes(), **kwargs)
-    elif model_depth == 152:
-        model = ResNet(Bottleneck, [3, 8, 36, 3], get_inplanes(), **kwargs)
-    elif model_depth == 200:
-        model = ResNet(Bottleneck, [3, 24, 36, 3], get_inplanes(), **kwargs)
-
-    return model
 
 if __name__ == "__main__":
     # region Settings
@@ -77,7 +51,7 @@ if __name__ == "__main__":
 
     LOAD_MODEL = True
     if LOAD_MODEL:
-        MODEL.load_state_dict(torch.load("savepoints/savepoint_back_50_84.2.pth"))
+        MODEL.load_state_dict(torch.load("savepoints/gesture_savepoints/savepoint_back_50_84.2.pth"))
         
     MODEL.to(DEVICE)
 
