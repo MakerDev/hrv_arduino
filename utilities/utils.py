@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 import seaborn as sns
-import config
+import utilities.config as config
 import torch
 from scipy.interpolate import interp1d
 from scipy.signal import filtfilt, butter, find_peaks

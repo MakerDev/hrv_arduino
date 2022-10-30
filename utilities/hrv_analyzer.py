@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.signal import find_peaks
-import utils
+import utilities.utils as utils
 import os
 import glob
 
@@ -115,7 +115,6 @@ if __name__ == "__main__":
 
     # plot_by_all_params(readings, [2,3,5], Wn_list=[0.1,0.2,0.5], distances=[145, 140], heights=[120, 125])
 
-    # #TODO: 14개 클립 각각에 대해 위 내용들을 한 figure로 plot하기.
     # folders = os.listdir('ppgs_sep')
     # for folder in folders:
     #     individual_folder_path = os.path.join('ppgs_sep', folder)

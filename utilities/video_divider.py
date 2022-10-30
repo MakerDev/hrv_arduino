@@ -4,10 +4,9 @@ import numpy as np
 import csv
 import random
 import math
-import utilities.utils as utils
+import utils
 import datetime
 from moviepy.editor import *
-
 
 
 def extract_second(timestamp:str):
@@ -74,6 +73,9 @@ if __name__ == "__main__":
     clip_emotion_label = ['neutral1', 'fear1', 'suprise1', 'sad1', 'disgust1', 'fear2',
                           'anger1', 'happy1', 'neutral2', 'disgust2', 'anger2', 'happy2', 'sad2', 'suprise2']
 
+    for emotion_label in clip_emotion_label:
+        os.makedirs(os.path.join(output_folder, emotion_label), exist_ok=True)
+
     #clip label 2부터 14까지 존재
     clip_label_lens     = [3.24, 3.04, 4.0, 3.24, 3.24, 3.23, 3.24, 3.24, 3.24, 3.24, 3.24, 3.24, 4.0]
     #쉬어가기 1~13까지 존재
@@ -98,9 +100,8 @@ if __name__ == "__main__":
                 #프레임단위는 그냥 올리기.
                 subclip = clip.subclip(start_time, start_time + math.ceil(clip_len))
                 output_filename = f"{clip_emotion_label[i]}_{filename}"
-                output_file_path = os.path.join(output_folder, output_filename)
+                output_file_path = os.path.join(output_folder, clip_emotion_label[i], output_filename)
 
-                #TODO: Remove this. 
                 if not os.path.exists(output_file_path):
                     subclip.write_videofile(output_file_path)
 

@@ -3,7 +3,7 @@ import numpy as np
 import csv
 import random
 import math
-import utils
+import utilities.utils as utils
 import datetime
 
 def capture_second_range(start_row, timestamps):

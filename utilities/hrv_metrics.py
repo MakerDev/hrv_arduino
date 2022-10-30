@@ -1,6 +1,6 @@
 import numpy as np
-import utils
-from utils import calc_rr_intervals
+import utilities.utils as utils
+from utilities.utils import calc_rr_intervals
 
 
 '''

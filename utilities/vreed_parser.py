@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
-from utils import *
+from utilities.utils import *
 import glob
 import os
 
