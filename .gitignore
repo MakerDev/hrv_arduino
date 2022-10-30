@@ -2,3 +2,11 @@
 /ppgs*
 __pycache__
 /hrv_pictures
+/arduino
+/savepoints
+/pretrained_models
+/ppg_logs
+/*dataset
+/*logs
+vreed.dat
+*.ps1
