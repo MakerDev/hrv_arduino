@@ -9,7 +9,7 @@ from tqdm import tqdm
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
-import config
+import utilities.config as config
 import torch
 from sklearn.model_selection import train_test_split
 
@@ -59,13 +59,15 @@ class GestureDataset(data.Dataset):
 
     def __len__(self):
         return len(self.inputs)
-        
+
 # Gesture data manager
 class GestureDataManager():
     def __init__(self, batch_size=4):
-        self.batch_size  = batch_size        
+        self.batch_size = batch_size        
     
-    
+    def get_all_items(self):
+        return self.inputs, self.targets
+
     def Load_Dataset(self):        
         spatial_transform = [ToTensor()]
         spatial_transform = Compose(spatial_transform)
@@ -81,7 +83,11 @@ class GestureDataManager():
         inputs = inputs.reshape(-1, 1, 700, 59, 6)
         # target_onehot = torch.Tensor(np.eye(7)[targets]).long()
         targets = torch.Tensor(targets).long()
+        
+        self.inputs = inputs
+        self.targets = targets
 
+        # Total sample size = 1402
         x_train, x_test, y_train, y_test = train_test_split(inputs, targets, test_size=0.2, shuffle=False)
 
         return GestureDataset(x_train, y_train), GestureDataset(x_test, y_test)
