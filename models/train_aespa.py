@@ -12,7 +12,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torch.nn as nn
 import torch
-import utils
+import utilities.utils as utils
 import numpy as np
 
 from models.aespa_dataset import *
@@ -86,7 +86,7 @@ def print_report_and_confusion_matrix(result_pred, result_anno, num_classes):
     print(conf_mat)
 
 
-def train(model_name, model, train_loader, test_loader, num_classes, savepoint_dir, epoch=200, device='cuda:0'):
+def train(model_name, model, train_loader, test_loader, num_classes, savepoint_dir, epoch=200, device='cuda:0', top_k=2):
     # region Settings
     ''''''''''''''''''''''''''''''''''''
     '''          Need to tune        '''
@@ -108,11 +108,14 @@ def train(model_name, model, train_loader, test_loader, num_classes, savepoint_d
 
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=L2WEIGHT_DECAY)
 
-    best_acc = 0.0
+    best_acc = 0.0    
+
     for epoch in range(1, epoch+1):
         model.train()
         total_loss = []
         total_acc = []
+        total_top_k_acc = []
+
         with tqdm(train_loader, unit='batch') as train_epoch:
             for i, (inputs, targets) in enumerate(train_epoch):
                 inputs = inputs.to(device)
@@ -123,7 +126,7 @@ def train(model_name, model, train_loader, test_loader, num_classes, savepoint_d
                 acc = utils.calculate_accuracy(outputs, targets)
                 total_loss.append(loss.cpu().detach().numpy())
                 total_acc.append(acc)
-
+                total_top_k_acc.append(utils.calculate_top_k_accuracy(outputs, targets, k=top_k))
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
@@ -132,13 +135,16 @@ def train(model_name, model, train_loader, test_loader, num_classes, savepoint_d
 
         train_loss = np.mean(total_loss)
         train_acc = np.mean(total_acc)
+        top_k_acc = np.mean(total_top_k_acc)
         writer.add_scalar('training loss', train_loss, epoch)
         writer.add_scalar('training accuracy', train_acc, epoch)
+        writer.add_scalar(f'trainig top {top_k} acc', top_k_acc, epoch)
 
-        print(f'Train loss {train_loss:.3f} | Train Acc {train_acc:.3f}')
+        print(f'Train loss {train_loss:.3f} | Train Acc {train_acc:.3f} | Top-{top_k} Acc {top_k_acc:.3f}')
 
         total_loss = []
         total_acc = []
+        total_top_k_acc = []
         result_pred = []
         result_anno = []
 
@@ -152,20 +158,23 @@ def train(model_name, model, train_loader, test_loader, num_classes, savepoint_d
 
                     val_loss = criterion(val_outputs, val_targets)
                     val_acc = utils.calculate_accuracy(val_outputs, val_targets)
+                    val_top_k_acc = utils.calculate_top_k_accuracy(val_outputs, val_targets, k=top_k)
                     result_pred.append(val_outputs.cpu().detach().numpy())
                     result_anno.append(val_targets.cpu().detach().numpy())
 
                     total_loss.append(val_loss.cpu().detach().numpy())
                     total_acc.append(val_acc)
+                    total_top_k_acc.append(val_top_k_acc)
                     test_epoch.set_description(f'Evaluating...->')
 
         total_loss_mean = np.mean(total_loss)
         total_acc_mean = np.mean(total_acc)
-
+        total_top_k_acc = np.mean(total_top_k_acc)
         writer.add_scalar('validation loss', total_loss_mean, epoch)
         writer.add_scalar('validation accuracy', total_acc_mean, epoch)
+        writer.add_scalar(f'validation top {top_k} acc', top_k_acc, epoch)
 
-        print(f'loss {total_loss_mean:.3f} | Acc {total_acc_mean:.3f}')
+        print(f'loss {total_loss_mean:.3f} | Acc {total_acc_mean:.3f} | Top-{top_k} Acc {total_top_k_acc:.3f}')
         print_report_and_confusion_matrix(result_pred, result_anno, num_classes)
 
         if epoch in [10, 20, 30, 50, 70, 85, 100, 120, 150, 170, 200, 250, 500]:
@@ -224,14 +233,16 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='AESPA arg parser')
 
     # 입력받을 인자값 설정 (default 값 설정가능)
-    parser.add_argument('--epoch', type=int, default=150)
+    parser.add_argument('--epoch', type=int, default=300)
     parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--as_hrv', type=bool, default=False)
     parser.add_argument('--as_sam', type=bool, default=False)
-    parser.add_argument('--interpolation', type=bool, default=True)
-    parser.add_argument('--kernel_size', type=int, default=128)
+    parser.add_argument('--interpolation', type=bool, default=False)
+    parser.add_argument('--use_survey', type=bool, default=False)
+    parser.add_argument('--kernel_size', type=int, default=64)
     parser.add_argument('--fc_size', type=int, default=512)
-    parser.add_argument('--target_seq_len', type=int, default=40000)
+    parser.add_argument('--target_seq_len', type=int, default=60000)
+    parser.add_argument('--top_k', type=int, default=2)
 
     args = parser.parse_args()
 
@@ -240,21 +251,25 @@ if __name__ == "__main__":
     IS_CUDA = torch.cuda.is_available()
     DEVICE = torch.device('cuda:' + str(GPU_NUM) if IS_CUDA else 'cpu')
 
-    COMMENT    = ''
+    COMMENT    = '_FOR_MM'
     MODEL_NAME = f"{'HRV' if args.as_hrv else 'PPG'}_" + \
                  f"{'SAM' if args.as_sam else 'KEYWORD'}_" + \
                  f"{'INTERP' if args.interpolation else ''}_" + \
                  f"K_{args.kernel_size}_" + \
+                 f"SV_{args.use_survey}_" + \
                  f"L_{args.fc_size}_" + \
-                 f"TS_{args.target_seq_len}" + COMMENT
+                 f"TS_{args.target_seq_len}_" + \
+                 f"TOPK_{args.top_k}" + COMMENT
 
+    print(f'{MODEL_NAME} training start')
 
     DM = AESPADataManager("./ppgs_sep", batch_size=args.batch_size)
     TRAIN_DATA, TEST_DATA = DM.load_dataset(
         as_hrv=args.as_hrv,
         as_sam=args.as_sam,
         interpolation=args.interpolation,
-        target_seq_len=args.target_seq_len)
+        target_seq_len=args.target_seq_len,
+        use_survey=args.use_survey)
     TRAIN_LOADER, TEST_LOADER = DM.load_dataloader(TRAIN_DATA, TEST_DATA)
 
     if args.as_sam:
@@ -267,7 +282,6 @@ if __name__ == "__main__":
 
     savepoint_dir = f'savepoints/{MODEL_NAME}'
     os.makedirs(savepoint_dir, exist_ok=True)
-
     train(model_name=MODEL_NAME, model=model, train_loader=TRAIN_LOADER, test_loader=TEST_LOADER, 
         num_classes=num_classes, savepoint_dir=savepoint_dir, epoch=args.epoch, device=DEVICE)
 
