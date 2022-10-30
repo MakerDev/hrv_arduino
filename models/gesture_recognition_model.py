@@ -1,21 +1,14 @@
-
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 
-from sklearn.svm import SVC
 from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import train_test_split
-import csv
-import glob
 import numpy as np
-from tqdm import tqdm
-import random
-import pickle
+
 import time
-import utils
-import config
+import utilities.utils as utils
 import joblib
 from gesture_dataset import load_kinematic_dataset, get_file_infos
 

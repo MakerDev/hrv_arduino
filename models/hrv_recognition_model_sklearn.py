@@ -2,7 +2,7 @@
 import pandas as pd
 from gesture_dataset import load_kinematic_dataset, get_file_infos
 import joblib
-import utils
+import utilities.utils as utils
 import time
 import numpy as np
 import glob

@@ -7,7 +7,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 from sklearn.model_selection import train_test_split
-import utils
+import utilities.utils as utils
 import numpy as np
 import torch
 

@@ -3,7 +3,7 @@ import numpy as np
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
-import utils
+import utilities.utils as utils
 from models.vreed_dataset import *
 import torch
 import torch.nn as nn
@@ -165,7 +165,7 @@ if __name__ == "__main__":
                 outputs = MODEL(inputs)
 
                 loss = criterion(outputs, targets)
-                acc = utils.calculate_accuracy(outputs, targets)
+                acc = utilities.utils.calculate_accuracy(outputs, targets)
                 total_loss.append(loss.cpu().detach().numpy())
                 total_acc.append(acc)
 
@@ -196,7 +196,7 @@ if __name__ == "__main__":
                     val_outputs = MODEL(val_inputs)
 
                     val_loss = criterion(val_outputs, val_targets)
-                    val_acc = utils.calculate_accuracy(val_outputs, val_targets)          
+                    val_acc = utilities.utils.calculate_accuracy(val_outputs, val_targets)          
                     result_pred.append(val_outputs.cpu().detach().numpy())
                     result_anno.append(val_targets.cpu().detach().numpy())
 
