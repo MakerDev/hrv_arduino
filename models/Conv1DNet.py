@@ -20,15 +20,16 @@ class Conv1dNetwork(nn.Module):
         self.dropout = nn.Dropout(0.5)
         self.conv_net = nn.Sequential(
             self.conv1d_1,
-            nn.BatchNorm1d(16),
+            #nn.BatchNorm1d(16),
             self.pool,
             self.conv1d_2,
-            nn.BatchNorm1d(32),
+            #nn.BatchNorm1d(32),
             self.pool,
         )
 
         #TODO: Add batchnorm. plus deepen fc layers
         flat_size = self.get_flat_size((1, seq_len), self.conv_net)
+        self.flat_size = flat_size
 
         self.fc_layer1 = nn.Linear(flat_size, fc_size)
         self.fc_layer2 = nn.Linear(fc_size, fc_size//2)
@@ -36,11 +37,11 @@ class Conv1dNetwork(nn.Module):
         self.fc_net = nn.Sequential(
             self.fc_layer1,
             nn.ReLU(),
-            nn.BatchNorm1d(fc_size),
+            #nn.BatchNorm1d(fc_size),
             self.dropout,
             self.fc_layer2,
             nn.ReLU(),
-            nn.BatchNorm1d(fc_size//2),
+            #nn.BatchNorm1d(fc_size//2),
             self.dropout,
             self.fc_layer3,
             nn.ReLU()
@@ -51,12 +52,25 @@ class Conv1dNetwork(nn.Module):
         return torch.flatten(f).shape[0]
 
     def forward(self, x):
+        # x = x.transpose(1, 2)
+        # x = self.conv_net(x)
+        # # x = x.transpose(1, 2)
+        # x = torch.flatten(x, 1)
+
+        # x = self.dropout(x)
+        x = self.get_feature(x)
+        x = self.fc_net(x)
+
+        return x
+
+    def get_feature(self, x):
+        '''
+        Get feature vector right before forwarding to fc layer.
+        This is to use feature vector for multimodality embedding
+        '''
         x = x.transpose(1, 2)
         x = self.conv_net(x)
         # x = x.transpose(1, 2)
         x = torch.flatten(x, 1)
-
-        # x = self.dropout(x)
-        x = self.fc_net(x)
 
         return x
