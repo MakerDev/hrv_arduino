@@ -1,14 +1,15 @@
-from torch.utils.data import Dataset, DataLoader
-from spatial_transforms import Resize, ToTensor, Compose
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
+
+from torch.utils.data import DataLoader
+from models.spatial_transforms import ToTensor, Compose
 import torch.utils.data as data
 import glob
 import csv
 import numpy as np
 import os
 from tqdm import tqdm
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 import utilities.config as config
 import torch
 from sklearn.model_selection import train_test_split
