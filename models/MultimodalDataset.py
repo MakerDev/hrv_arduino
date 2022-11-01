@@ -1,21 +1,13 @@
-from cProfile import label
-from typing import List, Tuple
-from torch.utils.data import DataLoader
-from spatial_transforms import ToTensor, Compose
-import torch.utils.data as data
-import glob
-import os
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 from sklearn.model_selection import train_test_split
-import utilities.utils as utils
+from torch.utils.data import DataLoader
+from aespa_dataset import AESPADataManager
+from gesture_dataset import GestureDataManager
+import torch.utils.data as data
 import numpy as np
-import torch
-import pandas as pd
 import random
-from aespa_dataset import AESPADataManager, AESPADataset
-from gesture_dataset import GestureDataManager, GestureDataset
 
 def sample_indices(targets, label, count):
     indices = [i for i, x in enumerate(targets) if x == label]
@@ -82,7 +74,7 @@ class MultimodalDataManager():
         self.inputs = all_inputs
         self.targets = all_targets
 
-        x_train, x_test, y_train, y_test = train_test_split(all_inputs, all_targets, test_size=0.2, shuffle=False)
+        x_train, x_test, y_train, y_test = train_test_split(all_inputs, all_targets, test_size=0.2, random_state=77, stratify=all_targets)
 
         return MultimodalDataset(x_train, y_train), MultimodalDataset(x_test, y_test)
 
