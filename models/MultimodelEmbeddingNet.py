@@ -49,10 +49,10 @@ class MultimodalEmbeddingNet(nn.Module):
         )
 
     def forward(self, x_resnet, x_conv1d):
-        resnet_feature = self.resnet.get_feature(x_resnet).reshape(batch_size, -1)
         conv_net_feature = self.conv1dnet.get_feature(x_conv1d)
-        batch_size = resnet_feature.size(0)
-        feature_embedding = torch.cat([resnet_feature, conv_net_feature])
+        batch_size = conv_net_feature.size(0)
+        resnet_feature = self.resnet.get_feature(x_resnet).reshape(batch_size, -1)
+        feature_embedding = torch.cat([resnet_feature, conv_net_feature], dim=1)
         
         x = self.classifier(feature_embedding)
 

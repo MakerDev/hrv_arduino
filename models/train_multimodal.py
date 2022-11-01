@@ -61,7 +61,7 @@ def train(model_name, model, train_loader, test_loader, num_classes, savepoint_d
 
         with tqdm(train_loader, unit='batch') as train_epoch:
             for i, (inputs, targets) in enumerate(train_epoch):
-                input_conv, input_resnet = inputs[:, 0].to(device), inputs[:, 1].to(device)
+                input_conv, input_resnet = inputs[0].to(device), inputs[1].to(device)
                 targets = targets.to(device)
                 outputs = model(input_resnet, input_conv)
 
@@ -95,11 +95,9 @@ def train(model_name, model, train_loader, test_loader, num_classes, savepoint_d
         with torch.no_grad():
             with tqdm(test_loader, unit='batch') as test_epoch:
                 for val_inputs, val_targets in test_epoch:                    
+                    input_conv, input_resnet = val_inputs[0].to(device), val_inputs[1].to(device)
                     val_targets = val_targets.to(device)
-                    val_outputs = model(val_inputs)
-                    input_conv, input_resnet = val_inputs[:, 0].to(device), val_inputs[:, 1].to(device)
-                    val_targets = val_targets.to(device)
-                    outputs = model(input_resnet, input_conv)
+                    val_outputs = model(input_resnet, input_conv)
 
                     val_loss = criterion(val_outputs, val_targets)
                     val_acc = utils.calculate_accuracy(val_outputs, val_targets)
@@ -124,7 +122,7 @@ def train(model_name, model, train_loader, test_loader, num_classes, savepoint_d
 
         if epoch in [10, 20, 30, 50, 70, 85, 100, 120, 150, 170, 200, 250, 500]:
             torch.save(model.state_dict(), os.path.join(savepoint_dir, f"{model_name}_{epoch}_{total_acc_mean*100:.1f}.pth"))
-        elif epoch >= 50 and total_acc_mean > best_acc:
+        elif epoch >= 5 and total_acc_mean > best_acc:
             torch.save(model.state_dict(), os.path.join(savepoint_dir, f"{model_name}_{epoch}_{total_acc_mean*100:.1f}.pth"))
         
         best_acc = max(total_acc_mean, best_acc)
@@ -151,19 +149,19 @@ if __name__ == '__main__':
 
     print(f'{MODEL_NAME} training start')
 
-    DM = MultimodalDataManager(batch_size=args.batch_size, aespa_dataset_path="./ppgs_sep")
-    TRAIN_DATA, TEST_DATA = DM.load_dataset()
-    TRAIN_LOADER, TEST_LOADER = DM.load_dataloader(TRAIN_DATA, TEST_DATA)
-
     #TODO: 더 좋게 학습한 모델로 교체
     convnet = Conv1dNetwork(out_channel=7, seq_len=60000, kernel_size=64, fc_size=512)
-    convnet_savepoint = './savepoitns/aespa_ppg/savepoint_221_79.7_PPG_SAM_TWO_DROPOUTS_K_64_L_512.pth'
+    convnet_savepoint = './savepoints/PPG_KEYWORD__K_64_SV_False_L_512_TS_60000_TOPK_2_FOR_MM/PPG_KEYWORD__K_64_SV_False_L_512_TS_60000_TOPK_2_FOR_MM_253_82.4.pth'
     convnet.load_state_dict(torch.load(convnet_savepoint))
 
     resnet_model = generate_model(18, n_classes=7)
     resnet_model.load_state_dict(torch.load("savepoints/gesture_savepoints/savepoint_back_50_84.2.pth"))
 
-    model = MultimodalEmbeddingNet(fc_size=args.fc_size)
+    model = MultimodalEmbeddingNet(resnet3d=resnet_model, conv1dnet=convnet, fc_size=args.fc_size)
+
+    DM = MultimodalDataManager(batch_size=args.batch_size, aespa_dataset_path="./ppgs_sep")
+    TRAIN_DATA, TEST_DATA = DM.load_dataset()
+    TRAIN_LOADER, TEST_LOADER = DM.load_dataloader(TRAIN_DATA, TEST_DATA)
 
     savepoint_dir = f'savepoints/{MODEL_NAME}'
     os.makedirs(savepoint_dir, exist_ok=True)
