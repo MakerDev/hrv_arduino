@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 def sf(float_input):
     scientific_output = np.format_float_scientific(float_input, trim='-', precision=0, exp_digits=2)

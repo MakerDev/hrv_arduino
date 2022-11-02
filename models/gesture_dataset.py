@@ -89,7 +89,8 @@ class GestureDataManager():
         self.targets = targets
 
         # Total sample size = 1402
-        x_train, x_test, y_train, y_test = train_test_split(inputs, targets, test_size=0.2, shuffle=False)
+        # x_train, x_test, y_train, y_test = train_test_split(inputs, targets, test_size=0.2, shuffle=False)
+        x_train, x_test, y_train, y_test = train_test_split(inputs, targets, test_size=0.2, random_state=77, stratify=targets)
 
         return GestureDataset(x_train, y_train), GestureDataset(x_test, y_test)
     
