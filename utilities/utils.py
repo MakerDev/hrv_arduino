@@ -5,6 +5,7 @@ from matplotlib.axes import Axes
 import seaborn as sns
 import utilities.config as config
 import torch
+import sklearn.metrics as metrics
 from scipy.interpolate import interp1d
 from scipy.signal import filtfilt, butter, find_peaks
 
@@ -62,6 +63,16 @@ def calculate_accuracy(outputs, targets):
         return n_correct_elems / batch_size
 
 
+def print_report_and_confusion_matrix(result_pred, result_anno, num_classes):
+    result_pred = np.array(result_pred).reshape(-1, num_classes)
+    result_pred = [np.argmax(pred) for pred in result_pred]
+    result_pred_np = np.array(result_pred).reshape(-1, 1).squeeze()
+    result_anno_np = np.array(result_anno).reshape(-1, 1).squeeze()
+
+    conf_mat = metrics.confusion_matrix(result_anno_np, result_pred_np)
+    print(metrics.classification_report(result_anno_np, result_pred_np, zero_division=0))
+    print(conf_mat)
+
 
 def plot_confusion_matrix(cf_matrix, normalize=False, to_show=False, savefile_path=None):
     plt.figure(figsize=(10, 9))
@@ -86,6 +97,7 @@ def plot_confusion_matrix(cf_matrix, normalize=False, to_show=False, savefile_pa
     if savefile_path != None:
         plt.savefig(savefile_path, dpi=150)
 
+
 def calc_rr_intervals(readings, distance=None, height=None):
     '''
     Return: r_peaks, rr_intervals
@@ -95,12 +107,14 @@ def calc_rr_intervals(readings, distance=None, height=None):
 
     return r_peaks, rr_intervals
 
+
 def apply_butter_filter(raw_readings, N, Wn):
     b, a = butter(N, Wn)
     readings = filtfilt(b, a, raw_readings)    
     readings = np.asarray(readings)
 
     return readings
+
 
 '''
 Filter not applied
@@ -141,6 +155,7 @@ def load_readings(filename, offset=0, apply_filter=True, N=5, Wn=0.1, load_only_
     readings = np.asarray(readings)
     return timestamps, readings
 
+
 def calculate_top_k_accuracy(outputs: torch.Tensor, targets, k=3):
     with torch.no_grad():
         batch_size = targets.size(0)
@@ -152,6 +167,7 @@ def calculate_top_k_accuracy(outputs: torch.Tensor, targets, k=3):
         n_correct_elems = correct.float().sum().item()
 
         return n_correct_elems / batch_size
+
 
 if __name__ == "__main__":
     pass

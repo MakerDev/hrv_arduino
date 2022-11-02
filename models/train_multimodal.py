@@ -18,16 +18,6 @@ import torch.nn.functional as F
 from models.MultimodelEmbeddingNet import *
 import sklearn.metrics as metrics
 
-#TODO: Move this to utils
-def print_report_and_confusion_matrix(result_pred, result_anno, num_classes):
-    result_pred = np.array(result_pred).reshape(-1, num_classes)
-    result_pred = [np.argmax(pred) for pred in result_pred]
-    result_pred_np = np.array(result_pred).reshape(-1, 1).squeeze()
-    result_anno_np = np.array(result_anno).reshape(-1, 1).squeeze()
-
-    conf_mat = metrics.confusion_matrix(result_anno_np, result_pred_np)
-    print(metrics.classification_report(result_anno_np, result_pred_np, zero_division=0))
-    print(conf_mat)
 
 def train(model_name, model, train_loader, test_loader, num_classes, savepoint_dir, epoch=200, device='cuda:0', top_k=2):
     # region Settings
@@ -118,7 +108,7 @@ def train(model_name, model, train_loader, test_loader, num_classes, savepoint_d
         writer.add_scalar(f'validation top {top_k} acc', top_k_acc, epoch)
 
         print(f'loss {total_loss_mean:.3f} | Acc {total_acc_mean:.3f} | Top-{top_k} Acc {total_top_k_acc:.3f}')
-        print_report_and_confusion_matrix(result_pred, result_anno, num_classes)
+        utils.print_report_and_confusion_matrix(result_pred, result_anno, num_classes)
 
         if epoch in [10, 20, 30, 50, 70, 85, 100, 120, 150, 170, 200, 250, 500]:
             torch.save(model.state_dict(), os.path.join(savepoint_dir, f"{model_name}_{epoch}_{total_acc_mean*100:.1f}.pth"))

@@ -13,15 +13,6 @@ import numpy as np
 import utilities.utils as utils
 import sklearn.metrics as metrics
 
-def print_report_and_confusion_matrix(result_pred, result_anno, num_classes):
-    result_pred = np.array(result_pred).reshape(-1, num_classes)
-    result_pred = [np.argmax(pred) for pred in result_pred]
-    result_pred_np = np.array(result_pred).reshape(-1, 1).squeeze()
-    result_anno_np = np.array(result_anno).reshape(-1, 1).squeeze()
-
-    conf_mat = metrics.confusion_matrix(result_anno_np, result_pred_np)
-    print(metrics.classification_report(result_anno_np, result_pred_np, zero_division=0))
-    print(conf_mat)
 
 if __name__ == "__main__":
     # region Settings
@@ -121,7 +112,7 @@ if __name__ == "__main__":
 
         print(f'Epoch {epoch}')
         print(f'loss {total_loss_mean:.3f} | Acc {total_acc_mean:.3f}')
-        print_report_and_confusion_matrix(result_pred, result_anno, 7)
+        utils.print_report_and_confusion_matrix(result_pred, result_anno, 7)
         best_acc = max(total_acc_mean, best_acc)
         print(f'Best so far: {best_acc*100:.2f}\n')
 
