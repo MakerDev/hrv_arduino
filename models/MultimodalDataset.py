@@ -90,5 +90,3 @@ class MultimodalDataManager():
 if __name__ == '__main__':
     DM = MultimodalDataManager(batch_size=4, aespa_dataset_path='./ppgs_sep')
     TRAIN_DATA, TEST_DATA = DM.load_dataset()
-    pass
-
