@@ -3,8 +3,8 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader
-from aespa_dataset import AESPADataManager
-from gesture_dataset import GestureDataManager
+from models.aespa_dataset import AESPADataManager
+from models.gesture_dataset import GestureDataManager
 import torch.utils.data as data
 import numpy as np
 import random
@@ -49,11 +49,11 @@ class MultimodalDataManager():
         self.batch_size = batch_size
         
         DM_AESPA = AESPADataManager(aespa_dataset_path, batch_size=batch_size)
-        _, _ = DM_AESPA.load_dataset()
+        self.aespa_train_dataset, self.aespa_test_dataset = DM_AESPA.load_dataset()
         self.aespa_inputs, self.aespa_targets = DM_AESPA.get_all_items()
 
         DM_GESTURE = GestureDataManager(batch_size)
-        _, _ = DM_GESTURE.Load_Dataset()
+        self.gesture_train_dataset, self.gesture_test_dataset = DM_GESTURE.Load_Dataset()
         self.gesture_inputs, self.gesture_targets = DM_GESTURE.get_all_items()
 
     def load_dataset(self):        

@@ -10,4 +10,5 @@ __pycache__
 /*logs
 vreed.dat
 *.ps1
-/official_test
+/official_test/aespa*
+/official_test/*pth

@@ -1,27 +1,11 @@
 import os 
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
-from ResNet3D import ResNet, generate_model
-from Conv1DNet import Conv1dNetwork
-from gesture_dataset import GestureDataset
-from aespa_dataset import AESPADataset
-from models.MultimodalDataset import MultimodalDataManager
-import argparse
-from torch.utils.tensorboard import SummaryWriter
-from tqdm import tqdm
-import torch.optim as optim
-import utilities.utils as utils
-import numpy as np
+from models.ResNet3D import ResNet
+from models.Conv1DNet import Conv1dNetwork
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
-
-class MultimodalDataset():
-    def __init__(self, aespa_dataset:AESPADataset, gesture_dataset:GestureDataset):
-        #TODO: 갯수 다른거랑 조합 여러개인거 어떻게 맞추냐.
-        self.aespa_dataset = aespa_dataset
-        self.gesture_dataset = gesture_dataset
 
 class MultimodalEmbeddingNet(nn.Module):
     def __init__(self, resnet3d, conv1dnet, fc_size=1024, out_channel=7):
